@@ -25,15 +25,12 @@ export class DialogAmqpController {
 
     @MessagePattern('changes.detected')
     public handleDetectedChanges(@Payload() changes: DetectedChangesDto) {
-        return null;
-        //return this._dialogService.integrateChanges(changes);
+        return this._dialogService.integrateChanges(changes);
     }
 
     @MessagePattern('suggestions.generated')
     public handleSuggestions(@Payload() suggestions: SuggestionsDto) {
-        return null;
-        //return this._dialogService.saveSuggestions(suggestions);
+        return this._dialogService.saveSuggestions(suggestions);
     }
-
 }
 

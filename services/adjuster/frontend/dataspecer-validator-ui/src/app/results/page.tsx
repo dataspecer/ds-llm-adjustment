@@ -113,63 +113,77 @@ export default function ResultsPage() {
   }
 
   return (
-    <div className="flex min-h-screen bg-zinc-900">
-      <div className="w-1/2 p-6 overflow-auto border-r border-zinc-800">
-        <h2 className="text-xl font-bold mb-4 text-gray-100">JSON Schema</h2>
-        <SyntaxHighlighter
-          language="json"
-          style={vscDarkPlus}
-          wrapLines
-          showLineNumbers
-          lineProps={lineNumber => {
-            if (typeof lineNumber !== 'number') return {};
-            const style = getLineStyle(lineNumber);
-            return {
-              style,
-              onClick: () => {
-                const change = highlightMap[lineNumber];
-                if (change) setSelectedChangeId(change.changeId);
-              }
-            };
-          }}
-        >
-          {schema}
-        </SyntaxHighlighter>
-        <div className="mt-4 text-sm text-gray-400">
-          <span>Legend: </span>
-          <span className="px-2 py-1 bg-green-900 text-green-200 rounded">Addition</span>{' '}
-          <span className="px-2 py-1 bg-red-900 text-red-200 rounded">Removal</span>{' '}
-          <span className="px-2 py-1 bg-blue-900 text-blue-200 rounded">Rename/Type Change</span>
+    <div className="flex flex-col min-h-screen bg-zinc-900">
+      <nav className="w-full flex items-center justify-between px-8 py-4 bg-zinc-800 border-b border-zinc-700">
+        <div className="flex items-center space-x-2">
+          <span className="font-bold text-lg text-white">Dataspecer</span>
+          <span className="text-lg text-gray-300">Adjuster</span>
         </div>
-      </div>
-
-      <div className="w-1/2 p-6 overflow-auto">
-        <h2 className="text-xl font-bold mb-4 text-gray-100">Change Details</h2>
-        {selectedChange ? (
-          <div>
-            <div className="mb-2 font-semibold text-gray-200">Type: {selectedChange.type}</div>
-            <div className="mb-2 text-gray-200">Path: {selectedChange.path}</div>
-            <div className="mb-2 text-gray-200">Description: {selectedChange.description}</div>
-            <div className="mb-2 text-gray-200">Acceptable: {selectedChange.isAcceptable ? 'Yes' : 'No'}</div>
-            <div className="mb-2 text-gray-200">Group ID: {selectedChange.groupId}</div>
-            {selectedSuggestion && (
-              <>
-                <div className="mb-2 text-gray-200">Suggestion: {selectedSuggestion.suggestion}</div>
-                <div className="mb-2 text-gray-200">Rationale: {selectedSuggestion.rationale}</div>
-                <div className="mb-2 text-gray-200">Confidence: {Math.round(selectedSuggestion.confidence * 100)}%</div>
-              </>
-            )}
-          </div>
-        ) : (
-          <div className="text-gray-400">Select a highlighted change in the schema to see details here.</div>
-        )}
-        <div className="mt-8">
-          <button
-            onClick={() => router.push('/')}
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-700 hover:bg-indigo-800"
+        <button
+          onClick={() => router.push('/')}
+          className="px-4 py-2 rounded text-white font-medium"
+          style={{ background: '#636E83' }}
+        >
+          Reimport
+        </button>
+      </nav>
+      <div className="flex flex-1">
+        <div className="w-1/2 p-6 overflow-auto border-r border-zinc-800">
+          <h2 className="text-xl font-bold mb-4 text-gray-100">JSON Schema</h2>
+          <SyntaxHighlighter
+            language="json"
+            style={{ ...vscDarkPlus, 'pre[class*="language-"]': { background: '#23272f' } }}
+            wrapLines
+            showLineNumbers
+            lineProps={lineNumber => {
+              if (typeof lineNumber !== 'number') return {};
+              const style = getLineStyle(lineNumber);
+              return {
+                style,
+                onClick: () => {
+                  const change = highlightMap[lineNumber];
+                  if (change) setSelectedChangeId(change.changeId);
+                }
+              };
+            }}
           >
-            Back to Upload
-          </button>
+            {schema}
+          </SyntaxHighlighter>
+          <div className="mt-4 text-sm text-gray-400">
+            <span>Legend: </span>
+            <span className="px-2 py-1 bg-green-900 text-green-200 rounded">Addition</span>{' '}
+            <span className="px-2 py-1 bg-red-900 text-red-200 rounded">Removal</span>{' '}
+            <span className="px-2 py-1 bg-blue-900 text-blue-200 rounded">Rename/Type Change</span>
+          </div>
+        </div>
+
+        <div className="w-1/2 p-6 overflow-auto">
+          <h2 className="text-xl font-bold mb-4 text-gray-100">Change Details</h2>
+          {selectedChange ? (
+            <div>
+              <div className="mb-2 font-semibold text-gray-200">Type: {selectedChange.type}</div>
+              <div className="mb-2 text-gray-200">Path: {selectedChange.path}</div>
+              <div className="mb-2 text-gray-200">Description: {selectedChange.description}</div>
+              <div className="mb-2 text-gray-200">Acceptable: {selectedChange.isAcceptable ? 'Yes' : 'No'}</div>
+              <div className="mb-2 text-gray-200">Group ID: {selectedChange.groupId}</div>
+              {selectedSuggestion && (
+                <>
+                  <div className="mb-2 text-gray-200">Suggestion: {selectedSuggestion.suggestion}</div>
+                </>
+              )}
+            </div>
+          ) : (
+            <div className="text-gray-400">Select a highlighted change in the schema to see details here.</div>
+          )}
+          <div className="mt-8">
+            <button
+              onClick={() => router.push('/')}
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white"
+              style={{ background: '#636E83' }}
+            >
+              Back to Upload
+            </button>
+          </div>
         </div>
       </div>
     </div>

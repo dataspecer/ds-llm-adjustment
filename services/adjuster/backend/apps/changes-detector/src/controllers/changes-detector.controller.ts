@@ -14,14 +14,7 @@ export class ChangesDetectorController {
     @Post('detect-changes')
     async detectChangesHttp(@Body() dto: DetectChangesDto): Promise<DetectedChangesDto> {
       const changes = await this._changesDetectorService.detect(dto);
-      this.client.emit('changes.detected', changes); // Notify dialog service
-      return changes;
-    }
-
-    @MessagePattern('detect.changes')
-    async detectChanges(@Payload() dto: DetectChangesDto): Promise<DetectedChangesDto> {
-      const changes = await this._changesDetectorService.detect(dto);
-      this.client.emit('changes.detected', changes); // Notify dialog service
+      this.client.emit('changes.detected', changes);
       return changes;
     }
 }

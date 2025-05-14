@@ -11,10 +11,6 @@ export class Suggestion {
     @IsOptional()
     @IsString()
     public rationale?: string;
-  
-    @IsOptional()
-    @IsNumber()
-    public confidence?: number;
   }
   
   export class SuggestionsDto {

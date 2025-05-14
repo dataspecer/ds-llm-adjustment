@@ -89,7 +89,7 @@ export default function UploadForm() {
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
         <label className="block text-sm font-medium text-gray-300 mb-1">
-          Old API Schema
+          Old JSON Schema
         </label>
         <input
           type="file"
@@ -104,7 +104,7 @@ export default function UploadForm() {
 
       <div>
         <label className="block text-sm font-medium text-gray-300 mb-1">
-          New API Schema
+          New JSON Schema
         </label>
         <input
           type="file"
@@ -137,7 +137,8 @@ export default function UploadForm() {
       <button
         type="submit"
         disabled={isLoading}
-        className="w-full bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded transition disabled:bg-blue-800 disabled:cursor-not-allowed"
+        className="w-full text-white px-4 py-2 rounded transition disabled:cursor-not-allowed"
+        style={{ background: isLoading ? '#636E83' : '#636E83' }}
       >
         {isLoading ? 'Processing...' : 'Analyze Changes'}
       </button>

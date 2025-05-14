@@ -31,8 +31,7 @@ export class ChangesSuggesterService {
       Consider:
       1. The impact on existing systems
       2. Backward compatibility
-      3. Best practices for API design
-      4. The requirements specified in the PSM`
+      3. Best practices for API design`
     );
 
     const schema = z.object({
@@ -40,8 +39,7 @@ export class ChangesSuggesterService {
         z.object({
           changeId: z.string().min(1),
           suggestion: z.string().min(1),
-          rationale: z.string().min(1),
-          confidence: z.number().min(0).max(1),
+          rationale: z.string().min(1)
         }).strict()
       ),
     });
@@ -55,8 +53,7 @@ export class ChangesSuggesterService {
     const suggestions: Suggestion[] = result.suggestions.map(suggestion => ({
       changeId: suggestion.changeId,
       suggestion: suggestion.suggestion,
-      rationale: suggestion.rationale,
-      confidence: suggestion.confidence,
+      rationale: suggestion.rationale
     }));
 
     return {

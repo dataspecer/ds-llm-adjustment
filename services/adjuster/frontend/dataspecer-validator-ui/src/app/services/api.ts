@@ -16,7 +16,6 @@ export interface Suggestion {
   changeId: string;
   suggestion: string;
   rationale: string;
-  confidence: number;
 }
 
 export interface SuggestionsDto {

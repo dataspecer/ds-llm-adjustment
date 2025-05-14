@@ -96,9 +96,9 @@ export default function Results() {
               <div key={suggestion.changeId} className="p-4 bg-blue-50 rounded-lg">
                 <div className="flex items-center justify-between">
                   <span className="font-medium">Change ID: {suggestion.changeId}</span>
-                  <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-sm">
+                  {/* <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-sm">
                     Confidence: {Math.round(suggestion.confidence * 100)}%
-                  </span>
+                  </span> */}
                 </div>
                 <p className="mt-2 text-gray-600">{suggestion.suggestion}</p>
                 <p className="mt-1 text-sm text-gray-500">{suggestion.rationale}</p>
