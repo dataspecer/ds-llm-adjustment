@@ -11,7 +11,12 @@ export class DetectChangesDto {
   newApi: string;
 
   @IsString()
-  psm: string;
+  @IsOptional()
+  psm?: string;
+
+  @IsString()
+  @IsOptional()
+  psmIri?: string;
 
   @IsOptional()
   @IsString()

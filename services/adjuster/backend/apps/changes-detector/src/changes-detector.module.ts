@@ -15,7 +15,7 @@ import { ChangesDetectorController } from './controllers/changes-detector.contro
           queueOptions: { durable: true },
         },
       },
-    ]),
+    ])
   ],
   controllers: [ChangesDetectorController],
   providers: [ChangesDetectorService],
