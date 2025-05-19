@@ -1,0 +1,138 @@
+version: '3.8'
+
+services:
+  frontend:
+    build:
+      context: ./frontend/dataspecer-validator-ui
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3000"
+    environment:
+      - NEXT_PUBLIC_CHANGES_DETECTOR_URL=http://localhost:3101
+      - NEXT_PUBLIC_CHANGES_SUGGESTER_URL=http://localhost:3102
+    depends_on:
+      - changes-detector
+      - changes-suggester
+    volumes:
+      - ./frontend/dataspecer-validator-ui:/app
+      - /app/node_modules
+    networks:
+      - adjuster-network
+
+  changes-detector:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "3101:3101"
+    environment:
+      - NODE_ENV=development
+      - RABBITMQ_URL=amqp://rabbitmq:5672
+      - RABBITMQ_USER=guest
+      - RABBITMQ_PASSWORD=guest
+      - CORS_ORIGIN=http://localhost:3001
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    env_file:
+      - .env
+    depends_on:
+      - rabbitmq
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    networks:
+      - adjuster-network
+    command: npm run start:dev changes-detector
+
+  changes-suggester:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "3102:3102"
+    environment:
+      - NODE_ENV=development
+      - RABBITMQ_URL=amqp://rabbitmq:5672
+      - RABBITMQ_USER=guest
+      - RABBITMQ_PASSWORD=guest
+      - CORS_ORIGIN=http://localhost:3001
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    env_file:
+      - .env
+    depends_on:
+      - rabbitmq
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    networks:
+      - adjuster-network
+    command: npm run start:dev changes-suggester
+
+  dialogs-handler:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "3103:3103"
+    environment:
+      - NODE_ENV=development
+      - RABBITMQ_URL=amqp://rabbitmq:5672
+      - RABBITMQ_USER=guest
+      - RABBITMQ_PASSWORD=guest
+      - CORS_ORIGIN=http://localhost:3001
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    env_file:
+      - .env
+    depends_on:
+      - rabbitmq
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    networks:
+      - adjuster-network
+    command: npm run start:dev dialogs-handler
+
+  dataspecer-adapter:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "3104:3000"
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - RABBITMQ_URL=amqp://rabbitmq:5672
+      - RABBITMQ_USER=guest
+      - RABBITMQ_PASSWORD=guest
+      - CORS_ORIGIN=http://localhost:3001
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    env_file:
+      - .env
+    depends_on:
+      - rabbitmq
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    networks:
+      - adjuster-network
+    command: npm run start:dev dataspecer-adapter
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    ports:
+      - "5672:5672"  # AMQP protocol port
+      - "15672:15672"  # Management UI port
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - adjuster-network
+
+volumes:
+  rabbitmq_data:
+    driver: local
+
+networks:
+  adjuster-network:
+    driver: bridge 
