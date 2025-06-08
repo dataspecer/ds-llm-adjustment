@@ -1,0 +1,721 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "/rejstřík-svazků-obcí/schema.json",
+  "title": "Dobrovolný svazek obcí",
+  "description": "Svazek obcí je právnickou osobou, která vede účetnictví podle zákona o účetnictví. ",
+  "type": "object",
+  "required": [
+    "id",
+    "type",
+    "idds",
+    "ič_svazku_obcí",
+    "název_svazku_obcí",
+    "souřadnice",
+    "vznik",
+    "stav_svazku_obcí",
+    "je_zapsán_v_rejstříku",
+    "má_webovou_stránku",
+    "má_zdroj_výčtu_členů",
+    "sídlí_na_adrese",
+    "vykonává",
+    "zahrnuje_jako_člena",
+    "je_orgánem_svazku_obcí"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "iri"
+    },
+    "type": {
+      "oneOf": [
+        {
+          "const": "Dobrovolný svazek obcí"
+        },
+        {
+          "type": "array",
+          "contains": {
+            "const": "Dobrovolný svazek obcí"
+          },
+          "items": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    "idds": {
+      "title": "IDDS",
+      "description": "Identifikátor datové schránky svazku obcí",
+      "type": "string"
+    },
+    "ič_svazku_obcí": {
+      "title": "IČ svazku obcí",
+      "description": "Identifikační číslo organizace svazku obcí",
+      "type": "string"
+    },
+    "název_svazku_obcí": {
+      "title": "název svazku obcí",
+      "description": "Oficiální název svazku obcí",
+      "type": "object",
+      "additionalProperties": {
+        "title": "Hodnota v jiném jazyce",
+        "type": "string"
+      },
+      "required": [
+
+      ],
+      "properties": {
+        "cs": {
+          "title": "Hodnota v českém jazyce",
+          "type": "string"
+        },
+        "en": {
+          "title": "Hodnota v anglickém jazyce",
+          "type": "string"
+        }
+      }
+    },
+    "právní_důvod_zrušení": {
+      "title": "Právní důvod zrušení",
+      "description": "Důvod, proč byl svazek zrušen, např. sloučení s jiným svazkem",
+      "type": "object",
+      "additionalProperties": {
+        "title": "Hodnota v jiném jazyce",
+        "type": "string"
+      },
+      "required": [
+
+      ],
+      "properties": {
+        "cs": {
+          "title": "Hodnota v českém jazyce",
+          "type": "string"
+        },
+        "en": {
+          "title": "Hodnota v anglickém jazyce",
+          "type": "string"
+        }
+      }
+    },
+    "souřadnice": {
+      "title": "Souřadnice",
+      "description": "Geografická poloha sídla svazku obcí (lat/lon)",
+      "type": "object",
+      "properties": {
+        "lat": {
+          "type": "number"
+        },
+        "lon": {
+          "type": "number"
+        }
+      },
+      "required": ["lat", "lon"]
+    },
+    "vznik": {
+      "title": "Vznik",
+      "description": "Datum vzniku svazku obcí",
+      "type": "number",
+      "format": "date"
+    },
+    "zrušení": {
+      "title": "Zrušení",
+      "description": "Datum právního zrušení svazku obcí – právní akt o ukončení jeho existence",
+      "type": "string",
+      "format": "date"
+    },
+    "zánik": {
+      "title": "Zánik",
+      "description": "Datum faktického ukončení činnosti svazku",
+      "type": "string",
+      "format": "date"
+    },
+    "stav_svazku_obcí": {
+      "title": "Stav svazku obcí",
+      "description": "Svazek obcí může být aktivní, zaniklý, ve zrušení",
+      "type": "string"
+    },
+    "je_zapsán_v_rejstříku": {
+      "title": "je zapsán v rejstříku",
+      "description": "rejstřík svazků obcí vedený u krajského úřadu příslušného podle sídla svazku obcí.",
+      "type": "object",
+      "required": [
+        "id",
+        "type",
+        "obsahuje_sbírku_listin"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "iri"
+        },
+        "type": {
+          "oneOf": [
+            {
+              "const": "Rejstřík svazků obcí"
+            },
+            {
+              "type": "array",
+              "contains": {
+                "const": "Rejstřík svazků obcí"
+              },
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "obsahuje_sbírku_listin": {
+          "title": "obsahuje sbírku listin",
+          "description": "součástí Rejstříku svazků obcí je sbírka listin, v níž jsou uloženy smlouva o vytvoření svazku obcí spolu se stanovami a změny těchto dokumentů.",
+          "type": "object",
+          "required": [
+            "id",
+            "type"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "iri"
+            },
+            "type": {
+              "oneOf": [
+                {
+                  "const": "Sbírka listin"
+                },
+                {
+                  "type": "array",
+                  "contains": {
+                    "const": "Sbírka listin"
+                  },
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            },
+            "smlouva_o_vytvoření_svazku_obcí": {
+              "title": "smlouva o vytvoření svazku obcí",
+              "description": "Dokument uložený ve Sbírce listin, obsahující také stanovy svazku a jejich změny.",
+              "type": "array",
+              "items": {
+                "title": "http://www.w3.org/2000/01/rdf-schema#Literal",
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "má_webovou_stránku": {
+      "title": "má webovou stránku",
+      "description": "webová stránka dobrovolného svazku obcí ve formátu URL",
+      "type": "object",
+      "required": [
+        "id",
+        "type"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "iri"
+        },
+        "type": {
+          "oneOf": [
+            {
+              "const": "Webová stránka"
+            },
+            {
+              "type": "array",
+              "contains": {
+                "const": "Webová stránka"
+              },
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "url_odkaz": {
+          "title": "URL odkaz",
+          "type": "array",
+          "items": {
+            "title": "http://www.w3.org/2000/01/rdf-schema#Literal",
+            "type": "string"
+          }
+        }
+      }
+    },
+    "má_zdroj_výčtu_členů": {
+      "title": "má zdroj výčtu členů",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "format": "iri"
+      }
+    },
+    "sídlí_na_adrese": {
+      "title": "sídlí na adrese",
+      "description": "Adresou se rozumí kombinace názvu okresu, názvu obce nebo vojenského újezdu, názvu části obce nebo v případě hlavního města Prahy názvu katastrálního území a názvu městského obvodu, čísla popisného nebo evidenčního, názvu ulice a čísla orientačního a dále zvláštních údajů pro doručování prostřednictvím poštovních služeb, která jednoznačně určuje adresní místo.",
+      "type": "object",
+      "required": [
+        "id",
+        "type"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "iri"
+        },
+        "type": {
+          "oneOf": [
+            {
+              "const": "adresa"
+            },
+            {
+              "type": "array",
+              "contains": {
+                "const": "adresa"
+              },
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "má_kód_adresního_místa": {
+          "title": "má kód adresního místa",
+          "type": "array",
+          "items": {
+            "title": "http://www.w3.org/2000/01/rdf-schema#Literal",
+            "type": "string"
+          }
+        },
+        "poštovní_směrovací_číslo": {
+          "title": "poštovní směrovací číslo",
+          "type": "array",
+          "items": {
+            "title": "http://www.w3.org/2000/01/rdf-schema#Literal",
+            "type": "string"
+          }
+        },
+        "má_název_obce_nebo_vojenského_újezdu": {
+          "title": "má název obce nebo vojenského újezdu",
+          "description": "Adresou se rozumí kombinace názvu okresu, názvu obce nebo vojenského újezdu, názvu části obce nebo v případě hlavního města Prahy názvu katastrálního území a názvu městského obvodu, čísla popisného nebo evidenčního, názvu ulice a čísla orientačního a dále zvláštních údajů pro doručování prostřednictvím poštovních služeb, která jednoznačně určuje adresní místo.",
+          "type": "array",
+          "items": {
+            "title": "http://www.w3.org/2000/01/rdf-schema#Literal",
+            "type": "string"
+          }
+        },
+        "má_číslo_domovní": {
+          "title": "má číslo domovní",
+          "description": "Adresou se rozumí kombinace názvu okresu, názvu obce nebo vojenského újezdu, názvu části obce nebo v případě hlavního města Prahy názvu katastrálního území a názvu městského obvodu, čísla popisného nebo evidenčního, názvu ulice a čísla orientačního a dále zvláštních údajů pro doručování prostřednictvím poštovních služeb, která jednoznačně určuje adresní místo.",
+          "type": "array",
+          "items": {
+            "title": "http://www.w3.org/2000/01/rdf-schema#Literal",
+            "type": "string"
+          }
+        },
+        "má_název_ulice": {
+          "title": "má název ulice",
+          "description": "Adresou se rozumí kombinace názvu okresu, názvu obce nebo vojenského újezdu, názvu části obce nebo v případě hlavního města Prahy názvu katastrálního území a názvu městského obvodu, čísla popisného nebo evidenčního, názvu ulice a čísla orientačního a dále zvláštních údajů pro doručování prostřednictvím poštovních služeb, která jednoznačně určuje adresní místo.",
+          "type": "array",
+          "items": {
+            "title": "http://www.w3.org/2000/01/rdf-schema#Literal",
+            "type": "string"
+          }
+        }
+      }
+    },
+    "vykonává": {
+      "title": "vykonává",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "format": "iri"
+      }
+    },
+    "zahrnuje_jako_člena": {
+      "title": "zahrnuje jako člena",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "title": "Členství",
+        "description": "vztah mezi obcí a konkrétním dobrovolným svazkem obcí, jehož je obec členem",
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "je_evidováno_v",
+          "má_zdroj_členství",
+          "je_členem_svazku_obcí"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "iri"
+          },
+          "type": {
+            "oneOf": [
+              {
+                "const": "Členství"
+              },
+              {
+                "type": "array",
+                "contains": {
+                  "const": "Členství"
+                },
+                "items": {
+                  "type": "string"
+                }
+              }
+            ]
+          },
+          "den_vzniku_členství": {
+            "title": "den vzniku členství",
+            "description": "Datum, kdy obec oficiálně vstoupila do daného DSO a stala se jeho členem",
+            "type": "array",
+            "items": {
+              "title": "http://www.w3.org/2000/01/rdf-schema#Literal",
+              "type": "string"
+            }
+          },
+          "den_zániku_členství": {
+            "title": "den zániku členství",
+            "description": "Datum, kdy obec ukončila své členství ve svazku, buď na základě rozhodnutí nebo z jiného důvodu (např. zánik svazku nebo vystoupení obce)",
+            "type": "array",
+            "items": {
+              "title": "http://www.w3.org/2000/01/rdf-schema#Literal",
+              "type": "string"
+            }
+          },
+          "je_evidováno_v": {
+            "title": "je evidováno v",
+            "type": "string",
+            "format": "iri"
+          },
+          "má_zdroj_členství": {
+            "title": "má zdroj členství",
+            "description": "každá členská obec je podložena konkrétním Zdrojem výčtu členů, který může mít různé úrovně ověřenosti a aktuálnosti",
+            "type": "object",
+            "required": [
+              "id",
+              "type",
+              "má_zdroj_výčtu_členů"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "iri"
+              },
+              "type": {
+                "oneOf": [
+                  {
+                    "const": "Zdroj výčtu členů"
+                  },
+                  {
+                    "type": "array",
+                    "contains": {
+                      "const": "Zdroj výčtu členů"
+                    },
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                ]
+              },
+              "datum_poslední_aktualizace": {
+                "title": "datum poslední aktualizace",
+                "description": "Časový údaj o poslední aktualizaci seznamu členů",
+                "type": "array",
+                "items": {
+                  "title": "http://www.w3.org/2000/01/rdf-schema#Literal",
+                  "type": "string"
+                }
+              },
+              "míra_ověřenosti": {
+                "title": "míra ověřenosti",
+                "description": "Úroveň spolehlivosti a přesnosti daného zdroje",
+                "type": "array",
+                "items": {
+                  "title": "http://www.w3.org/2000/01/rdf-schema#Literal",
+                  "type": "string"
+                }
+              },
+              "typ_zdroje": {
+                "title": "typ zdroje",
+                "description": "Specifikace zdroje, např. oficiální rejstřík, interní evidence apod",
+                "type": "array",
+                "items": {
+                  "title": "http://www.w3.org/2000/01/rdf-schema#Literal",
+                  "type": "string"
+                }
+              },
+              "poskytovatel_zdroje": {
+                "title": "poskytovatel zdroje",
+                "description": "Subjekt nebo instituce, která zdroj poskytla",
+                "type": "array",
+                "items": {
+                  "title": "http://www.w3.org/2000/01/rdf-schema#Literal",
+                  "type": "string"
+                }
+              },
+              "má_zdroj_výčtu_členů": {
+                "type": "string",
+                "format": "iri"
+              }
+            }
+          },
+          "je_členem_svazku_obcí": {
+            "title": "obec",
+            "description": "Obec je základním územním samosprávným společenstvím občanů; tvoří územní celek, který je vymezen hranicí území obce.",
+            "type": "object",
+            "required": [
+              "id",
+              "type"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "iri"
+              },
+              "type": {
+                "oneOf": [
+                  {
+                    "const": "obec"
+                  },
+                  {
+                    "type": "array",
+                    "contains": {
+                      "const": "obec"
+                    },
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                ]
+              },
+              "ič_obce": {
+                "title": "IČ obce",
+                "description": "Identifikační číslo obce, jedinečný kód, který obci přiděluje stát pro administrativní účely",
+                "type": "array",
+                "items": {
+                  "title": "http://www.w3.org/2000/01/rdf-schema#Literal",
+                  "type": "number"
+                }
+              },
+              "kraj_obce": {
+                "title": "kraj obce",
+                "description": "Název správního regionu, do kterého členská obec spadá",
+                "type": "array",
+                "items": {
+                  "title": "http://www.w3.org/2000/01/rdf-schema#Literal",
+                  "type": "string"
+                }
+              },
+              "kód_obce": {
+                "title": "kód obce",
+                "description": "Kód členské obce dle RÚIAN (Registr územní identifikace, adres a nemovitostí) nebo CISOB (Centrální evidence svazků obcí), který slouží k jednoznačné identifikaci obce v těchto registrech.",
+                "type": "array",
+                "items": {
+                  "title": "http://www.w3.org/2000/01/rdf-schema#Literal",
+                  "type": "string"
+                }
+              },
+              "název_obce": {
+                "title": "název obce",
+                "description": "Oficiální název obce, používaný pro její identifikaci v právních a administrativních dokumentech",
+                "type": "array",
+                "items": {
+                  "title": "http://www.w3.org/2000/01/rdf-schema#Literal",
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "je_orgánem_svazku_obcí": {
+      "title": "orgán",
+      "description": "Státní orgán, územní samosprávný celek a fyzická nebo právnická osoba, byla-li jí svěřena působnost v oblasti veřejné správy.",
+      "type": "object",
+      "required": [
+        "id",
+        "type",
+        "orgán_má_funkce_(působnosti)"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "iri"
+        },
+        "type": {
+          "oneOf": [
+            {
+              "const": "orgán"
+            },
+            {
+              "type": "array",
+              "contains": {
+                "const": "orgán"
+              },
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "název_orgánu": {
+          "title": "Název orgánu",
+          "description": "Oficiální název orgánu svazku obcí (např. Valná hromada, Předsednictvo, Kontrolní komise)",
+          "type": "array",
+          "items": {
+            "title": "http://www.w3.org/2000/01/rdf-schema#Literal",
+            "type": "string"
+          }
+        },
+        "typ_orgánu": {
+          "title": "Typ orgánu",
+          "type": "array",
+          "items": {
+            "title": "http://www.w3.org/2000/01/rdf-schema#Literal",
+            "type": "string"
+          }
+        },
+        "orgán_má_funkce_(působnosti)": {
+          "title": "Orgán má funkce (působnosti)",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "title": "Působnost",
+            "description": "Vztah mezi orgánem, který vykonává určité pravomoci a úkoly, a osobou, která tyto úkoly realizuje. Určuje, kdo je zodpovědný za vykonání funkcí daného orgánu.",
+            "type": "object",
+            "required": [
+              "id",
+              "type",
+              "vykonává_působnost_orgánu"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "iri"
+              },
+              "type": {
+                "oneOf": [
+                  {
+                    "const": "Působnost"
+                  },
+                  {
+                    "type": "array",
+                    "contains": {
+                      "const": "Působnost"
+                    },
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                ]
+              },
+              "den_vzniku_funkce": {
+                "title": "den vzniku funkce",
+                "description": "Datum založení nebo ustavení orgánu",
+                "type": "array",
+                "items": {
+                  "title": "http://www.w3.org/2000/01/rdf-schema#Literal",
+                  "type": "string"
+                }
+              },
+              "den_zániku_funkce": {
+                "title": "den zániku funkce",
+                "description": "Datum zrušení orgánu (pokud zanikl)",
+                "type": "array",
+                "items": {
+                  "title": "http://www.w3.org/2000/01/rdf-schema#Literal",
+                  "type": "string"
+                }
+              },
+              "název_funkce": {
+                "title": "Název funkce",
+                "description": "např. předseda, místopředseda",
+                "type": "array",
+                "items": {
+                  "title": "http://www.w3.org/2000/01/rdf-schema#Literal",
+                  "type": "string"
+                }
+              },
+              "způsob_jednání": {
+                "title": "Způsob jednání",
+                "description": "Text popisující, jak osoba v této funkci jedná za svazek",
+                "type": "array",
+                "items": {
+                  "title": "http://www.w3.org/2000/01/rdf-schema#Literal",
+                  "type": "string"
+                }
+              },
+              "vykonává_působnost_orgánu": {
+                "title": "Osoba vykonávající působnost orgánu",
+                "description": "Osoba, která vykonává působnost určitého orgánu v rámci dobrovolného svazku obcí.",
+                "type": "object",
+                "required": [
+                  "id",
+                  "type"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "format": "iri"
+                  },
+                  "type": {
+                    "oneOf": [
+                      {
+                        "const": "Osoba vykonávající působnost orgánu"
+                      },
+                      {
+                        "type": "array",
+                        "contains": {
+                          "const": "Osoba vykonávající působnost orgánu"
+                        },
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    ]
+                  },
+                  "bydliště": {
+                    "title": "bydliště",
+                    "description": "Adresa trvalého nebo přechodného pobytu osoby, která vykonává funkci v orgánu svazku obcí",
+                    "type": "array",
+                    "items": {
+                      "title": "http://www.w3.org/2000/01/rdf-schema#Literal",
+                      "type": "string"
+                    }
+                  },
+                  "příjmení": {
+                    "title": "příjmení",
+                    "description": "Příjmení osoby vykonávající působnost orgánu",
+                    "type": "array",
+                    "items": {
+                      "title": "http://www.w3.org/2000/01/rdf-schema#Literal",
+                      "type": "string"
+                    }
+                  },
+                  "jméno": {
+                    "title": "jméno",
+                    "description": "Křestní jméno osoby vykonávající působnost orgánu",
+                    "type": "array",
+                    "items": {
+                      "title": "http://www.w3.org/2000/01/rdf-schema#Literal",
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

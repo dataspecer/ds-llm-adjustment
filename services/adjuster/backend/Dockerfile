@@ -3,7 +3,7 @@ FROM node:18-alpine
 WORKDIR /app
 
 # Install system dependencies
-RUN apk add --no-cache python3 make g++
+RUN apk add --no-cache python3 make g++ sqlite-dev
 
 # Copy package files
 COPY package*.json ./
@@ -12,6 +12,9 @@ COPY tsconfig*.json ./
 
 # Install dependencies
 RUN npm install
+
+# Force reinstall and rebuild sqlite3 to ensure it works in container
+RUN npm rebuild sqlite3
 
 # Copy source code
 COPY . .

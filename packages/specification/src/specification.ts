@@ -130,15 +130,6 @@ export interface GenerateSpecificationOptions {
   subdirectory?: string;
 }
 
-
-
-
-
-
-
-
-
-
 export async function generateSpecification(packageId: string, context: GenerateSpecificationContext, options: GenerateSpecificationOptions = {}): Promise<void> {
   const subdirectory = options.subdirectory ?? "";
   const queryParams = options.queryParams ?? "";

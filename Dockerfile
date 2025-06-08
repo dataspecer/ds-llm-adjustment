@@ -1,4 +1,4 @@
-FROM oven/bun:1.2.4-alpine AS base
+FROM oven/bun:1.2.4-debian AS base
 
 # Builds in /usr/src/app and copies to /usr/src/final to avoid copying build dependencies
 FROM base AS builder

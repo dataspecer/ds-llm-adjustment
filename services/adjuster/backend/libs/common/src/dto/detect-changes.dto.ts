@@ -21,4 +21,40 @@ export class DetectChangesDto {
   @IsOptional()
   @IsString()
   artifactFormat?: string;
+}
+
+export class DetectChangesFromIriDto {
+  @IsString()
+  dialogId: string;
+
+  @IsString()
+  psmIri: string;
+
+  @IsString()
+  dataSpecificationIri: string;
+
+  @IsString()
+  newJsonSchema: string;
+
+  @IsOptional()
+  @IsString()
+  artifactFormat?: string;
+}
+
+export class DetectChangesHybridDto {
+  @IsString()
+  dialogId: string;
+
+  @IsString()
+  psmIri: string;
+
+  @IsString()
+  oldJsonSchema: string;
+
+  @IsString()
+  newJsonSchema: string;
+
+  @IsOptional()
+  @IsString()
+  artifactFormat?: string;
 } 

@@ -1,6 +1,20 @@
 version: '3.8'
 
 services:
+
+  dataspecer:
+    build:
+      context: ../../
+      dockerfile: Dockerfile
+    ports:
+      - "3002:80"
+    environment:
+      - BASE_URL=http://localhost
+    volumes:
+      - ../../database:/usr/src/app/database
+    networks:
+      - adjuster-network
+
   frontend:
     build:
       context: ./frontend/dataspecer-validator-ui
@@ -10,6 +24,7 @@ services:
     environment:
       - NEXT_PUBLIC_CHANGES_DETECTOR_URL=http://localhost:3101
       - NEXT_PUBLIC_CHANGES_SUGGESTER_URL=http://localhost:3102
+      - NEXT_PUBLIC_DATASPECER_BACKEND=http://localhost:3002
     depends_on:
       - changes-detector
       - changes-suggester
@@ -32,10 +47,12 @@ services:
       - RABBITMQ_PASSWORD=guest
       - CORS_ORIGIN=http://localhost:3001
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - DATASPECER_BACKEND_URL=http://dataspecer:80
     env_file:
       - .env
     depends_on:
       - rabbitmq
+      - dataspecer
     volumes:
       - ./backend:/app
       - /app/node_modules
@@ -66,30 +83,6 @@ services:
     networks:
       - adjuster-network
     command: npm run start:dev changes-suggester
-
-  dialogs-handler:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    ports:
-      - "3103:3103"
-    environment:
-      - NODE_ENV=development
-      - RABBITMQ_URL=amqp://rabbitmq:5672
-      - RABBITMQ_USER=guest
-      - RABBITMQ_PASSWORD=guest
-      - CORS_ORIGIN=http://localhost:3001
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-    env_file:
-      - .env
-    depends_on:
-      - rabbitmq
-    volumes:
-      - ./backend:/app
-      - /app/node_modules
-    networks:
-      - adjuster-network
-    command: npm run start:dev dialogs-handler
 
   dataspecer-adapter:
     build:

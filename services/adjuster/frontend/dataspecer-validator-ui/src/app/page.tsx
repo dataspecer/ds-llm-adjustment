@@ -1,6 +1,19 @@
 'use client'
 
+import { Suspense } from 'react'
 import UploadForm from './components/UploadForm'
+
+function UploadFormWithSuspense() {
+  return (
+    <Suspense fallback={
+      <div className="bg-zinc-800 rounded-lg p-6 shadow-lg">
+        <div className="text-center text-gray-400">Loading...</div>
+      </div>
+    }>
+      <UploadForm />
+    </Suspense>
+  )
+}
 
 export default function Home() {
   return (
@@ -14,7 +27,7 @@ export default function Home() {
       <main className="flex-1 p-8">
         <div className="max-w-4xl mx-auto">
           <div className="bg-zinc-800 rounded-lg p-6 shadow-lg">
-            <UploadForm />
+            <UploadFormWithSuspense />
           </div>
         </div>
       </main>
