@@ -2,7 +2,7 @@
 
 set -e
 
-function prepareDatabase {
+prepareDatabase() {
   # Prepare database
   echo "📦 Preparing/checking database"
   mkdir -p /usr/src/app/database/stores

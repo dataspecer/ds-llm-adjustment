@@ -10,7 +10,7 @@ import { ResourceModel } from "./models/resource-model.ts";
 import { getDefaultConfiguration } from "./routes/configuration.ts";
 import { createDataPsm, deleteDataPsm } from "./routes/dataPsm.ts";
 import { getlightweightFromSimplified as getlightweightOwlFromSimplified } from "./routes/experimental.ts";
-import { getSingleFile, getZip } from "./routes/generate.ts";
+import { getSingleFile, getZip, getJsonSchema } from "./routes/generate.ts";
 import { exportPackageResource, importPackageResource } from "./routes/export-import-raw.ts";
 import { getGenerateApplicationByModelId, getGeneratedApplication } from "./routes/genapp.ts";
 import { generate } from "./routes/generate.ts";
@@ -150,6 +150,7 @@ application.post(apiBasename + "/experimental/lightweight-owl-from-simplified.tt
 
 application.get(apiBasename + "/generate", generate);
 application.get(apiBasename + "/experimental/output.zip", getZip);
+application.get(apiBasename + "/preview/schema.json", getJsonSchema);
 application.get(apiBasename + "/preview/*", getSingleFile);
 application.get(apiBasename + "/generate/application", getGenerateApplicationByModelId);
 

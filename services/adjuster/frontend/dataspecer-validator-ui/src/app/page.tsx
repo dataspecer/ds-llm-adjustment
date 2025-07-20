@@ -1,7 +1,9 @@
 'use client'
 
-import { Suspense } from 'react'
+import { Suspense, useState, useEffect } from 'react'
 import UploadForm from './components/UploadForm'
+import SpecificationMaintainerFlow from './components/SpecificationMaintainerFlow'
+import { useSearchParams } from 'next/navigation'
 
 function UploadFormWithSuspense() {
   return (
@@ -15,7 +17,34 @@ function UploadFormWithSuspense() {
   )
 }
 
-export default function Home() {
+function SpecificationMaintainerWithSuspense() {
+  return (
+    <Suspense fallback={
+      <div className="bg-zinc-800 rounded-lg p-6 shadow-lg">
+        <div className="text-center text-gray-400">Loading...</div>
+      </div>
+    }>
+      <SpecificationMaintainerFlow />
+    </Suspense>
+  )
+}
+
+function HomeContent() {
+  const searchParams = useSearchParams()
+  const [mode, setMode] = useState<'developer' | 'maintainer'>('developer')
+
+  useEffect(() => {
+    // Check URL parameters to determine initial mode
+    const urlMode = searchParams.get('mode')
+    const psmSchema = searchParams.get('data-psm-schema')
+    const dataSpecification = searchParams.get('data-specification')
+    
+    // If PSM parameters are present or mode=maintainer, set to maintainer mode
+    if (urlMode === 'maintainer' || (psmSchema && dataSpecification)) {
+      setMode('maintainer')
+    }
+  }, [searchParams])
+
   return (
     <div className="flex flex-col min-h-screen bg-zinc-900 text-white">
       <nav className="w-full flex items-center justify-between px-8 py-4 bg-zinc-800 border-b border-zinc-700">
@@ -23,14 +52,59 @@ export default function Home() {
           <span className="font-bold text-lg text-white">Dataspecer</span>
           <span className="text-lg text-gray-300">Adjuster</span>
         </div>
+        
+        {/* Mode Switch */}
+        <div className="flex items-center space-x-4">
+          <span className="text-sm text-gray-400">Mode:</span>
+          <div className="flex bg-zinc-700 rounded-lg p-1">
+            <button
+              onClick={() => setMode('developer')}
+              className={`px-3 py-1 rounded text-sm transition-colors ${
+                mode === 'developer'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              Developer
+            </button>
+            <button
+              onClick={() => setMode('maintainer')}
+              className={`px-3 py-1 rounded text-sm transition-colors ${
+                mode === 'maintainer'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              Specification Maintainer
+            </button>
+          </div>
+        </div>
       </nav>
       <main className="flex-1 p-8">
         <div className="max-w-4xl mx-auto">
           <div className="bg-zinc-800 rounded-lg p-6 shadow-lg">
-            <UploadFormWithSuspense />
+            {mode === 'developer' ? (
+              <UploadFormWithSuspense />
+            ) : (
+              <SpecificationMaintainerWithSuspense />
+            )}
           </div>
         </div>
       </main>
     </div>
+  )
+}
+
+export default function Home() {
+  return (
+    <Suspense fallback={
+      <div className="flex flex-col min-h-screen bg-zinc-900 text-white">
+        <div className="flex items-center justify-center flex-1">
+          <div className="text-center text-gray-400">Loading...</div>
+        </div>
+      </div>
+    }>
+      <HomeContent />
+    </Suspense>
   )
 }

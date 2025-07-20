@@ -82,6 +82,7 @@ export const generate = asyncHandler(async (request: express.Request, response: 
 
   return;
 });
+
 class SingleFileStreamDictionary implements StreamDictionary {
   requestedFileContents: string | null = null;
   constructor(private requestedFile: string) {}
@@ -100,6 +101,30 @@ class SingleFileStreamDictionary implements StreamDictionary {
         if (path === this.requestedFile) {
           this.requestedFileContents = data;
         }
+      },
+      close: () => Promise.resolve(),
+    };
+  }
+}
+
+// Debug stream dictionary to see all generated files
+class DebugStreamDictionary implements StreamDictionary {
+  generatedFiles: string[] = [];
+  
+  readPath(): InputStream {
+    throw new Error("Method not implemented.");
+  }
+  exists(): Promise<boolean> {
+    throw new Error("Method not implemented.");
+  }
+  list(): Promise<string[]> {
+    throw new Error("Method not implemented.");
+  }
+  writePath(path: string) {
+    return {
+      write: async (data: string) => {
+        this.generatedFiles.push(path);
+        console.log(`Generated file: ${path} (${data.length} characters)`);
       },
       close: () => Promise.resolve(),
     };
@@ -187,3 +212,319 @@ export const getSingleFile = asyncHandler(async (request: express.Request, respo
     return;
   }
 });
+
+export const getJsonSchema = asyncHandler(async (request: express.Request, response: express.Response) => {
+  const querySchema = z.object({
+    iri: z.string().min(1),
+    psm: z.string().optional(), // Optional PSM IRI to generate schema for specific PSM
+  });
+  const query = querySchema.parse(request.query);
+
+  const resource = await resourceModel.getPackage(query.iri);
+  if (!resource) {
+    response.status(404).send({ error: "Package does not exist." });
+    return;
+  }
+
+  try {
+    // Get all data specifications to find PSM schemas
+    const dataSpecifications = Object.fromEntries((await dataSpecificationModel.getAllDataSpecifications()).map((s) => [s.iri, s])) as Record<string, FullDataSpecification>;
+    
+    console.log('Available data specifications:', Object.keys(dataSpecifications));
+    console.log('Looking for IRI:', query.iri);
+    
+    const dataSpec = dataSpecifications[query.iri];
+    
+    if (!dataSpec) {
+      // Try to get the data specification directly by IRI
+      console.log('Data specification not found in getAllDataSpecifications, trying direct lookup...');
+      
+      try {
+        // Try using the resource model directly to get package info
+        const packageResource = await resourceModel.getPackage(query.iri);
+        if (packageResource) {
+          console.log('Package found via resourceModel, trying frontend-style JSON schema generation...');
+          
+          // Try direct JSON schema generation first
+          const directSchema = await generateJsonSchemaUsingFrontendLogic(query.iri, query.psm);
+          if (directSchema) {
+            console.log('Frontend-style JSON schema generation successful');
+            response.type("application/json").send(directSchema);
+            return;
+          }
+          
+          console.log('Frontend-style generation returned null, trying original artifact system...');
+          
+          // First, let's see what files are actually generated
+          const debugStreamDict = new DebugStreamDictionary();
+          await generateArtifacts(query.iri, debugStreamDict, "?iri=" + encodeURIComponent(query.iri));
+          
+          console.log('All generated files:', debugStreamDict.generatedFiles);
+          
+          // Now look for JSON schema files in the actual generated files
+          const jsonSchemaFiles = debugStreamDict.generatedFiles.filter(path => 
+            path.toLowerCase().includes('schema') && 
+            (path.endsWith('.json') || path.includes('json'))
+          );
+          
+          console.log('JSON schema candidates:', jsonSchemaFiles);
+          
+          // Try to get the first JSON schema file we find
+          if (jsonSchemaFiles.length > 0) {
+            for (const schemaFile of jsonSchemaFiles) {
+              const streamDict = new SingleFileStreamDictionary(schemaFile);
+              await generateArtifacts(query.iri, streamDict, "?iri=" + encodeURIComponent(query.iri));
+              if (streamDict.requestedFileContents) {
+                console.log(`Found JSON schema at: ${schemaFile}`);
+                response.type("application/json").send(streamDict.requestedFileContents);
+                return;
+              }
+            }
+          }
+          
+          // If no schema files found, try the standard paths
+          const possiblePaths = [
+            "schema.json",
+            "cs/schema.json", 
+            "en/schema.json",
+            "artifacts/schema.json",
+            "json-schema/schema.json"
+          ];
+          
+          for (const path of possiblePaths) {
+            const streamDict = new SingleFileStreamDictionary(path);
+            await generateArtifacts(query.iri, streamDict, "?iri=" + encodeURIComponent(query.iri));
+            if (streamDict.requestedFileContents) {
+              console.log(`Found schema at path: ${path}`);
+              response.type("application/json").send(streamDict.requestedFileContents);
+              return;
+            }
+          }
+          
+          console.log('No JSON schema found in any expected paths, falling back to basic schema');
+          
+          // Last resort - return the basic schema we had before that was working
+          const basicJsonSchema = {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object", 
+            "title": `Schema for package ${query.iri}`,
+            "description": `Generated basic schema for package ${query.iri}`,
+            "properties": {
+              "@context": {
+                "type": "string",
+                "description": "JSON-LD context"
+              },
+              "@type": {
+                "type": "string", 
+                "description": "RDF type"
+              }
+            },
+            "additionalProperties": true
+          };
+
+          response.type("application/json").send(JSON.stringify(basicJsonSchema, null, 2));
+          return;
+        }
+      } catch (artifactError) {
+        console.log('Artifact generation failed:', artifactError);
+      }
+      
+      response.status(404).send({ error: "Data specification not found." });
+      return;
+    }
+
+    console.log('Data specification found:', dataSpec.iri);
+    console.log('PSM stores available:', Object.keys(dataSpec.psmStores || {}));
+
+    // Find PSM schemas in this data specification
+    const psmSchemas = Object.keys(dataSpec.psmStores || {});
+    
+    if (psmSchemas.length === 0) {
+      console.log('No PSM schemas found, falling back to artifact generation...');
+      
+      // Try artifact generation as fallback
+      const streamDictionary = new SingleFileStreamDictionary("schema.json");
+      await generateArtifacts(query.iri, streamDictionary);
+
+      if (streamDictionary.requestedFileContents) {
+        response.type("application/json").send(streamDictionary.requestedFileContents);
+        return;
+      }
+
+      // Final fallback - basic schema
+      const basicJsonSchema = {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object", 
+        "title": `Schema for ${query.iri}`,
+        "description": `No PSM schemas found for package ${query.iri}`,
+        "properties": {
+          "@context": {
+            "type": "string",
+            "description": "JSON-LD context"
+          },
+          "@type": {
+            "type": "string", 
+            "description": "RDF type"
+          }
+        },
+        "additionalProperties": true
+      };
+
+      response.type("application/json").send(JSON.stringify(basicJsonSchema, null, 2));
+      return;
+    }
+
+    // Use specific PSM if provided, otherwise use the first one
+    const targetPsmIri = query.psm || psmSchemas[0];
+    const targetPsm = psmSchemas.find((psm: string) => psm === targetPsmIri);
+    
+    console.log('Target PSM IRI:', targetPsmIri);
+    console.log('PSM found:', !!targetPsm);
+    
+    if (!targetPsm) {
+      response.status(404).send({ error: `PSM schema ${targetPsmIri} not found in package.` });
+      return;
+    }
+
+    // Try to generate using the artifact generation system targeting the specific PSM
+    const streamDictionary = new SingleFileStreamDictionary("schema.json");
+    
+    // Create a minimal context that focuses on this PSM schema
+    const artifactContext = {
+      modelRepository: new BackendModelRepository(resourceModel),
+      output: streamDictionary,
+      fetch: httpFetch,
+    };
+
+    // Try to generate using the PSM schema directly
+    await generateSpecification(targetPsmIri, artifactContext);
+
+    if (streamDictionary.requestedFileContents) {
+      response.type("application/json").send(streamDictionary.requestedFileContents);
+      return;
+    }
+
+    // If that doesn't work, try generating from the package and look for artifacts
+    await generateArtifacts(query.iri, streamDictionary);
+
+    if (streamDictionary.requestedFileContents) {
+      response.type("application/json").send(streamDictionary.requestedFileContents);
+      return;
+    }
+
+    // Final fallback - basic schema
+    const basicJsonSchema = {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object", 
+      "title": `Schema for PSM ${targetPsmIri}`,
+      "description": `Generated basic schema for PSM ${targetPsmIri}`,
+      "properties": {
+        "@context": {
+          "type": "string",
+          "description": "JSON-LD context"
+        },
+        "@type": {
+          "type": "string", 
+          "description": "RDF type"
+        }
+      },
+      "additionalProperties": true
+    };
+
+    response.type("application/json").send(JSON.stringify(basicJsonSchema, null, 2));
+    return;
+
+  } catch (error) {
+    console.error("Error generating JSON schema:", error);
+    response.status(500).send({ error: "Failed to generate JSON schema" });
+    return;
+  }
+});
+
+async function generateJsonSchemaUsingFrontendLogic(packageIri: string, psmIri?: string): Promise<string | null> {
+  try {
+    console.log('Attempting frontend-style JSON schema generation for package:', packageIri, 'PSM:', psmIri);
+    
+    // Get the package resource
+    const packageResource = await resourceModel.getPackage(packageIri);
+    if (!packageResource) {
+      console.log('Package not found');
+      return null;
+    }
+
+    // Find PSM schemas in the package if no specific PSM provided
+    if (!psmIri && packageResource.subResources) {
+      const psmResources = packageResource.subResources.filter((r: any) => 
+        r.types?.includes('https://schemas.dataspecer.com/core/data-psm/schema')
+      );
+      if (psmResources.length > 0) {
+        psmIri = psmResources[0].iri;
+        console.log('Found PSM schemas in package:', psmResources.map((r: any) => r.iri));
+      }
+    }
+
+    if (!psmIri) {
+      console.log('No PSM schema found for generation');
+      return null;
+    }
+
+    // Try to use the existing artifact generation with explicit JSON schema path
+    // Check if schema.json exists in the generated files
+    const possibleJsonSchemaPaths = [
+      `${psmIri}/schema.json`,
+      `schema.json`, 
+      `en/schema.json`,
+      `cs/schema.json`,
+      `json/schema.json`
+    ];
+
+    for (const path of possibleJsonSchemaPaths) {
+      const streamDict = new SingleFileStreamDictionary(path);
+      await generateArtifacts(packageIri, streamDict, "?iri=" + encodeURIComponent(packageIri));
+      
+      if (streamDict.requestedFileContents) {
+        console.log(`Frontend-style JSON schema found at path: ${path}`);
+        return streamDict.requestedFileContents;
+      }
+    }
+
+    // If specific paths don't work, try using the debug approach to find all files
+    const debugStreamDict = new DebugStreamDictionary();
+    await generateArtifacts(packageIri, debugStreamDict, "?iri=" + encodeURIComponent(packageIri));
+    
+    console.log('All generated files for JSON schema search:', debugStreamDict.generatedFiles);
+    
+    // Look for any JSON files that might be schemas
+    const jsonFiles = debugStreamDict.generatedFiles.filter(path => 
+      path.toLowerCase().includes('json') || path.toLowerCase().includes('schema')
+    );
+    
+    console.log('Potential JSON schema files:', jsonFiles);
+
+    // Try each JSON file
+    for (const jsonFile of jsonFiles) {
+      const streamDict = new SingleFileStreamDictionary(jsonFile);
+      await generateArtifacts(packageIri, streamDict, "?iri=" + encodeURIComponent(packageIri));
+      
+      if (streamDict.requestedFileContents) {
+        console.log(`Found JSON content at: ${jsonFile}`);
+        // Check if it looks like a JSON schema
+        try {
+          const parsed = JSON.parse(streamDict.requestedFileContents);
+          if (parsed.$schema || parsed.type || parsed.properties) {
+            console.log('Content appears to be a JSON schema');
+            return streamDict.requestedFileContents;
+          }
+        } catch (e) {
+          // Not valid JSON
+        }
+      }
+    }
+
+    console.log('Frontend-style generation failed to find JSON schema');
+    return null;
+  } catch (error) {
+    console.log('Frontend-style JSON schema generation failed:', error);
+    return null;
+  }
+}

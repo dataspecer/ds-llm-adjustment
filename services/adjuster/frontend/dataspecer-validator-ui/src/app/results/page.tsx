@@ -147,7 +147,7 @@ export default function ResultsPage() {
     // For nested properties, use a more conservative approach - limit highlighting to smaller objects
     let braceCount = 0;
     let foundFirstBrace = false;
-    let maxLinesToCheck = 10; // More conservative limit for nested properties
+    const maxLinesToCheck = 10; // More conservative limit for nested properties
     let linesChecked = 0;
     
     for (let i = objectStart; i < lines.length && linesChecked < maxLinesToCheck; i++) {

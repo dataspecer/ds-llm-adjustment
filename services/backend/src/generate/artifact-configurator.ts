@@ -158,6 +158,13 @@ export function getSchemaArtifacts(
   const dataSpecificationConfiguration = DataSpecificationConfigurator.getFromObject(configuration);
   const generatorsEnabledByDefault = dataSpecificationConfiguration.generatorsEnabledByDefault!;
 
+  console.log('getSchemaArtifacts called with:');
+  console.log('- psmSchemaIri:', psmSchemaIri);
+  console.log('- configuration:', JSON.stringify(configuration, null, 2));
+  console.log('- generatorsEnabledByDefault:', generatorsEnabledByDefault);
+  console.log('- useGenerators:', dataSpecificationConfiguration.useGenerators);
+  console.log('- useGenerators["json"]:', dataSpecificationConfiguration.useGenerators?.["json"]);
+
   const artifacts: DataSpecificationArtefact[] = [];
 
   const ldkitArtifact: DataSpecificationSchema = new DataSpecificationSchema();
@@ -168,7 +175,10 @@ export function getSchemaArtifacts(
   ldkitArtifact.publicUrl = `${baseUrl}/${ldkitArtifactFileName}`;
   ldkitArtifact.psm = psmSchemaIri;
   ldkitArtifact.configuration = configuration;
-  if ((dataSpecificationConfiguration.useGenerators?.["json"] ?? generatorsEnabledByDefault) !== false) {
+  
+  const ldkitCondition = (dataSpecificationConfiguration.useGenerators?.["json"] ?? generatorsEnabledByDefault) !== false;
+  console.log('LDkit artifact condition result:', ldkitCondition);
+  if (ldkitCondition) {
     artifacts.push(ldkitArtifact);
   }
 
@@ -180,9 +190,19 @@ export function getSchemaArtifacts(
   jsonSchema.publicUrl = `${baseUrl}/${jsonSchemaFileName}`;
   jsonSchema.psm = psmSchemaIri;
   jsonSchema.configuration = configuration;
-  if ((dataSpecificationConfiguration.useGenerators?.["json"] ?? generatorsEnabledByDefault) !== false) {
+  
+  const jsonCondition = (dataSpecificationConfiguration.useGenerators?.["json"] ?? generatorsEnabledByDefault) !== false;
+  console.log('JSON schema artifact condition result:', jsonCondition);
+  console.log('JSON schema generator identifier:', JSON_SCHEMA.Generator);
+  if (jsonCondition) {
     artifacts.push(jsonSchema);
+    console.log('Added JSON schema artifact:', jsonSchema);
+  } else {
+    console.log('JSON schema artifact NOT added due to condition');
   }
+
+  console.log('Total artifacts created:', artifacts.length);
+  console.log('Artifact details:', artifacts.map(a => ({ generator: a.generator, outputPath: a.outputPath })));
 
   return artifacts;
 }

@@ -1,9 +1,9 @@
-FROM node:18-alpine
+FROM node:20-alpine
 
 WORKDIR /app
 
-# Install system dependencies
-RUN apk add --no-cache python3 make g++ sqlite-dev
+# Install system dependencies for PostgreSQL instead of SQLite
+RUN apk add --no-cache python3 make g++ postgresql-dev
 
 # Copy package files
 COPY package*.json ./
@@ -12,9 +12,6 @@ COPY tsconfig*.json ./
 
 # Install dependencies
 RUN npm install
-
-# Force reinstall and rebuild sqlite3 to ensure it works in container
-RUN npm rebuild sqlite3
 
 # Copy source code
 COPY . .
@@ -26,7 +23,7 @@ RUN npm run build changes-detector && \
     npm run build dataspecer-adapter
 
 # Expose ports for all services
-EXPOSE 3101 3102 3103 3000
+EXPOSE 3101 3102 3100 3000
 
 # Start all apps in development mode
 CMD ["npm", "run", "start:dev"] 
