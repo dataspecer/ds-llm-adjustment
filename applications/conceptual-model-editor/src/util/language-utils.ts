@@ -3,12 +3,15 @@ import type {
   SemanticModelClass,
   SemanticModelRelationship,
 } from "@dataspecer/core-v2/semantic-model/concepts";
-import type {
-  SemanticModelClassUsage,
-  SemanticModelRelationshipUsage,
-} from "@dataspecer/core-v2/semantic-model/usage/concepts";
-import { getDescriptionLanguageString, getNameLanguageString, getUsageNoteLanguageString } from "./name-utils";
-import { SemanticModelClassProfile, SemanticModelRelationshipProfile } from "@dataspecer/core-v2/semantic-model/profile/concepts";
+import {
+  getDescriptionLanguageString,
+  getNameLanguageString,
+  getUsageNoteLanguageString,
+} from "./name-utils";
+import {
+  SemanticModelClassProfile,
+  SemanticModelRelationshipProfile,
+} from "@dataspecer/core-v2/semantic-model/profile/concepts";
 
 /**
  * Tries to get a string from `languageString` in `preferredLanguage`.
@@ -95,13 +98,11 @@ const getLanguageHierarchy = (language: string) => {
 
 export const getLanguagesForNamedThing = (
   thing:
-        | null
-        | SemanticModelClass
-        | SemanticModelRelationship
-        | SemanticModelClassUsage
-        | SemanticModelRelationshipUsage
-        | SemanticModelClassProfile
-        | SemanticModelRelationshipProfile
+    | null
+    | SemanticModelClass
+    | SemanticModelRelationship
+    | SemanticModelClassProfile
+    | SemanticModelRelationshipProfile
 ) => {
   const nameLs = getNameLanguageString(thing) ?? {};
   const descriptionLs = getDescriptionLanguageString(thing) ?? {};

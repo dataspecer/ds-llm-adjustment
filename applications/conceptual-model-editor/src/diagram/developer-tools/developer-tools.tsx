@@ -18,9 +18,9 @@ import {
 } from "@xyflow/react";
 
 import "./developer-tools.css";
-import { useLayoutDialog } from "../../layout/layout-dialog-full";
-import { useExploration } from "../features/highlighting/exploration/context/highlighting-exploration-mode";
+import { useExploration } from "../../context/highlighting-exploration-mode";
 import { t } from "../../application";
+import { useActions } from "@/action/actions-react-binding";
 
 /**
  * Provides some internal information.
@@ -31,8 +31,7 @@ export function DeveloperTools() {
   const [changeLoggerActive, setChangeLoggerActive] = useState(false);
   const [viewportLoggerActive, setViewportLoggerActive] = useState(true);
   const explorationMode = useExploration();
-
-  const layoutDialogUse = useLayoutDialog();
+  const { openPerformLayoutVisualModelDialog } = useActions();
 
   return (
     <div>
@@ -52,7 +51,7 @@ export function DeveloperTools() {
           >
             Viewport
           </DevToolButton>
-          <button onClick={_ => layoutDialogUse.open()}>Layout</button>
+          <button onClick={_ => openPerformLayoutVisualModelDialog()}>{t("layout-dialog-open-button")}</button>
           <DevToolButton
             setActive={explorationMode.toggleHighlighting}
             active={explorationMode.isHighlightingOn}
@@ -64,7 +63,6 @@ export function DeveloperTools() {
         {changeLoggerActive && <ChangeLogger />}
         {viewportLoggerActive && <ViewportLogger />}
       </div>
-      {layoutDialogUse.isLayoutDialogOpen && <layoutDialogUse.DialogComponent></layoutDialogUse.DialogComponent>}
     </div>
   );
 }
@@ -145,12 +143,18 @@ function ChangeInfo({ change }: { change: NodeChange | EdgeChange }) {
     <div style={{ marginBottom: 4 }}>
       <div>node id: {id}</div>
       <div>
-        {type === "add" ? JSON.stringify(change.item, null, 2) : null}
-        {type === "dimensions" ? `dimensions: ${change.dimensions?.width ?? "-"} x ${change.dimensions?.height ?? "-"}` : null}
-        {type === "position" ? `position: ${change.position?.x.toFixed(1,) ?? "-"}, ${change.position?.y.toFixed(1) ?? "-"}` : null}
-        {type === "remove" ? "remove" : null}
-        {type === "select" ? (change.selected ? "select" : "unselect") : null}
-        {type === "replace" ? JSON.stringify(change.item, null, 2) : null}
+        {type === "add" ?
+          JSON.stringify(change.item, null, 2) : null}
+        {type === "dimensions" ?
+          `dimensions: ${change.dimensions?.width ?? "-"} x ${change.dimensions?.height ?? "-"}` : null}
+        {type === "position" ?
+          `position: ${change.position?.x.toFixed(1,) ?? "-"}, ${change.position?.y.toFixed(1) ?? "-"}` : null}
+        {type === "remove" ?
+          "remove" : null}
+        {type === "select" ?
+          (change.selected ? "select" : "unselect") : null}
+        {type === "replace" ?
+          JSON.stringify(change.item, null, 2) : null}
       </div>
     </div>
   );

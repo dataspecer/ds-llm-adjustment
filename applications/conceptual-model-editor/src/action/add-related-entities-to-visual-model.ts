@@ -1,8 +1,14 @@
 import { VisualModel, WritableVisualModel } from "@dataspecer/core-v2/visual-model";
 import { EntityModel } from "@dataspecer/core-v2";
 import { AggregatedEntityWrapper } from "@dataspecer/core-v2/semantic-model/aggregator";
-import { SemanticModelClassUsage, SemanticModelRelationshipUsage, isSemanticModelClassUsage, isSemanticModelRelationshipUsage } from "@dataspecer/core-v2/semantic-model/usage/concepts";
-import { SemanticModelEntity, SemanticModelGeneralization, SemanticModelRelationship, isSemanticModelClass, isSemanticModelGeneralization, isSemanticModelRelationship } from "@dataspecer/core-v2/semantic-model/concepts";
+import {
+  SemanticModelEntity,
+  SemanticModelGeneralization,
+  SemanticModelRelationship,
+  isSemanticModelClass,
+  isSemanticModelGeneralization,
+  isSemanticModelRelationship,
+} from "@dataspecer/core-v2/semantic-model/concepts";
 
 import type { UseNotificationServiceWriterType } from "../notification/notification-service-context";
 import { getDomainAndRange } from "../util/relationship-utils";
@@ -11,7 +17,12 @@ import { addSemanticGeneralizationToVisualModelAction } from "./add-generalizati
 import { addSemanticRelationshipToVisualModelAction } from "./add-relationship-to-visual-model";
 import { addSemanticRelationshipProfileToVisualModelAction } from "./add-relationship-profile-to-visual-model";
 import { ModelGraphContextType } from "../context/model-context";
-import { isSemanticModelClassProfile, isSemanticModelRelationshipProfile, SemanticModelClassProfile, SemanticModelRelationshipProfile } from "@dataspecer/core-v2/semantic-model/profile/concepts";
+import {
+  isSemanticModelClassProfile,
+  isSemanticModelRelationshipProfile,
+  SemanticModelClassProfile,
+  SemanticModelRelationshipProfile,
+} from "@dataspecer/core-v2/semantic-model/profile/concepts";
 import { createVisualModelOperationExecutor } from "@/dataspecer/visual-model/visual-model-operation-executor";
 
 /**
@@ -37,7 +48,6 @@ export function addRelatedEntitiesAction(
 
   const visualOperationExecutor = createVisualModelOperationExecutor(visualModel);
 
-  const addingUsage = isSemanticModelClassUsage(entity);
   const addingProfile = isSemanticModelClassProfile(entity);
   for (const wrapper of entities) {
     const candidate = wrapper.aggregatedEntity;
@@ -61,45 +71,10 @@ export function addRelatedEntitiesAction(
           notifications, graph, visualModel, candidate.id, candidateModel.getId());
       }
     }
-    if (isSemanticModelRelationshipUsage(candidate) || isSemanticModelRelationshipProfile(candidate)) {
+    if (isSemanticModelRelationshipProfile(candidate)) {
       if (shouldAddRelationshipUsageOrProfile(visualModel, identifier, candidate)) {
         addSemanticRelationshipProfileToVisualModelAction(
           notifications, graph, visualModel, candidate.id, candidateModel.getId());
-      }
-    }
-    if (isSemanticModelClassUsage(candidate)) {
-      if (shouldAddUsage(visualModel, identifier, candidate)) {
-        // "candidate" is profile of "identifier"
-        visualOperationExecutor.tryAddProfile({
-          identifier: candidate.id,
-          model: candidateModel.getId(),
-        }, {
-          identifier: entity.id,
-          model: entityModel.getId(),
-        });
-      } else if (addingUsage && shouldAddUsage(visualModel, candidate.id, entity)) {
-        // "entity" is profile of "candidate"
-        visualOperationExecutor.tryAddProfile({
-          identifier: entity.id,
-          model: entityModel.getId(),
-        }, {
-          identifier: candidate.id,
-          model: candidateModel.getId(),
-
-        });
-      }
-    }
-    if (addingUsage && isSemanticModelClass(candidate)) {
-      // We are adding usage, candidate is a class, it could profiled class.
-      if (entity.usageOf === candidate.id) {
-        // "entity" is profile of "candidate"
-        visualOperationExecutor.tryAddProfile({
-          identifier: entity.id,
-          model: entityModel.getId(),
-        }, {
-          identifier: candidate.id,
-          model: candidateModel.getId(),
-        });
       }
     }
     if (isSemanticModelClassProfile(candidate)) {
@@ -173,7 +148,7 @@ function shouldAddRelationship(
 function shouldAddRelationshipUsageOrProfile(
   visualModel: VisualModel,
   identifier: string,
-  candidate: SemanticModelRelationshipUsage | SemanticModelRelationshipProfile,
+  candidate: SemanticModelRelationshipProfile,
 ): boolean {
   const { domain, range } = getDomainAndRange(candidate);
   if (domain?.concept === identifier) {
@@ -185,23 +160,6 @@ function shouldAddRelationshipUsageOrProfile(
   } else {
     return false;
   }
-}
-
-function shouldAddUsage(
-  visualModel: VisualModel,
-  profiled: string,
-  profile: SemanticModelClassUsage,
-): boolean {
-  if (profile.id === profiled) {
-    // We do not support self profiles.
-    return false;
-  }
-  // The candidate may be specialization of what we are adding.
-  if (profile.usageOf === profiled) {
-    // We return true if the other is in the visual model.
-    return visualModel.hasVisualEntityForRepresented(profile.id);
-  }
-  return false;
 }
 
 function shouldAddProfile(
@@ -220,4 +178,3 @@ function shouldAddProfile(
   }
   return false;
 }
-

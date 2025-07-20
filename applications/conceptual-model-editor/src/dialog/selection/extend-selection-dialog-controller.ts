@@ -98,7 +98,9 @@ export interface CreateExtendSelectionControllerType {
   toggleExtendOnlyThroughEdges: () => void;
 }
 
-export function useExtendSelectionController({ state, changeState }: DialogProps<ExtendSelectionState>): CreateExtendSelectionControllerType {
+export function useExtendSelectionController(
+  { state, changeState }: DialogProps<ExtendSelectionState>
+): CreateExtendSelectionControllerType {
   const { extendSelection } = useActions();
 
   return useMemo(() => {
@@ -130,22 +132,21 @@ export function useExtendSelectionController({ state, changeState }: DialogProps
         return null;
       }).filter(extensionType => extensionType !== null);
 
-      extendSelection(
+      const extension = extendSelection(
         {
           identifiers: state.selections.nodeSelection,
           areIdentifiersFromVisualModel: state.areIdentifiersFromVisualModel
         },
         relevantExtensionTypes, VisibilityFilter.OnlyVisible, null, true
-      ).then(extension => {
-        setSelections({
-          nodeSelection: state.selections.nodeSelection.concat(extension.nodeSelection),
-          edgeSelection: state.selections.edgeSelection.concat(extension.edgeSelection),
-        });
-      }).catch(console.error);
+      )
+      setSelections({
+        nodeSelection: state.selections.nodeSelection.concat(extension.nodeSelection),
+        edgeSelection: state.selections.edgeSelection.concat(extension.edgeSelection),
+      });
     };
 
     const toggleExtendOnlyThroughEdges = () => {
-      changeState({...state, shouldExtendOnlyThroughEdges: !state.shouldExtendOnlyThroughEdges});
+      changeState({ ...state, shouldExtendOnlyThroughEdges: !state.shouldExtendOnlyThroughEdges });
     };
 
     return {

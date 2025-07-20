@@ -34,12 +34,13 @@ import {
   type DiagramCallbacks,
 } from "./diagram-api";
 import {
-  type Node as ApiNode,
   type Edge as ApiEdge,
   type ViewportDimensions,
   EdgeType as ApiEdgeType,
   Position,
   GroupWithContent,
+  DiagramNodeTypes,
+  isVisualModelDiagramNode,
 } from "./diagram-model";
 import { type EdgeToolbarProps } from "./edge/edge-toolbar";
 import { EntityNodeName } from "./node/entity-node";
@@ -59,6 +60,8 @@ import { GroupMenu } from "./node/group-menu";
 import { findTopLevelGroup } from "../action/utilities";
 import { GeneralCanvasMenuComponentProps } from "./canvas/canvas-menu-general";
 import { isEqual, omit } from "lodash";
+import { VisualModelNodeName } from "./node/visual-model-diagram-node";
+import { AlignmentMenu } from "./node/alignment-actions-menu";
 
 const UNINITIALIZED_VALUE_GROUP_POSITION = 10000000;
 
@@ -68,10 +71,10 @@ const getTopLeftPosition = (nodes: Node<any>[]) => {
     y: UNINITIALIZED_VALUE_GROUP_POSITION,
   };
   nodes.forEach(node => {
-    if(node.position.x < topLeft.x) {
+    if (node.position.x < topLeft.x) {
       topLeft.x = node.position.x;
     }
-    if(node.position.y < topLeft.y) {
+    if (node.position.y < topLeft.y) {
       topLeft.y = node.position.y;
     }
   });
@@ -80,14 +83,14 @@ const getTopLeftPosition = (nodes: Node<any>[]) => {
 };
 
 const getBotRightPosition = (nodes: Node<any>[]) => {
-  const botRight = {x: -10000000, y: -10000000};
+  const botRight = { x: -10000000, y: -10000000 };
   nodes.forEach(node => {
     const x = node.position.x + (node.measured?.width ?? 0);
-    if(x > botRight.x) {
+    if (x > botRight.x) {
       botRight.x = x;
     }
     const y = node.position.y + (node.measured?.height ?? 0);
-    if(y > botRight.y) {
+    if (y > botRight.y) {
       botRight.y = y;
     }
   });
@@ -157,7 +160,7 @@ const createGroupNode = (groupId: string, content: Node<any>[], hidden: boolean)
   return groupNode
 };
 
-export type NodeType = Node<ApiNode>;
+export type NodeType = Node<DiagramNodeTypes>;
 
 export type EdgeType = Edge<ApiEdge>;
 
@@ -258,7 +261,6 @@ interface UseDiagramControllerType {
 
   alignmentController: AlignmentController;
 
-  // TODO RadStr: Change into DiagramNodeTypes or whatever is it called in the other branch (after merge)
   onNodeMouseEnter: (event: React.MouseEvent, node: Node) => void;
 
   onNodeMouseLeave: (event: React.MouseEvent, node: Node) => void;
@@ -309,9 +311,12 @@ function useCreateReactStates() {
   // This has side-effect, that when we are handling the dragging in the onNodeDrag and onNodeDragStop events,
   // then we have to also process the nodes stored in nodesInGroupWhichAreNotPartOfDragging
   // Currently we are not doing any kind of such processing, so it is heads-up for future.
-  // Alternatively we could use the ReactFlow groups (https://reactflow.dev/learn/layouting/sub-flows), but it makes everything worse.
-  // We would have to work with relative coordinates. Basically we would still have to do all the stuff we are doing now but with additional issues.
-  // So we use the groups, but only as visual element, that is we don't connect group and nodes in the group in reactflow through parentId property.
+  // Alternatively we could use the ReactFlow groups (https://reactflow.dev/learn/layouting/sub-flows),
+  // but it makes everything worse.
+  // We would have to work with relative coordinates.
+  // Basically we would still have to do all the stuff we are doing now but with additional issues.
+  // So we use the groups, but only as visual element, that is we don't connect group and nodes in the group
+  // in reactflow through parentId property.
   const selectedNodesRef = useRef<string[]>([]);
 
   // These are user selected nodes, that means the nodes in selected groups are not included
@@ -331,11 +336,11 @@ function useCreateReactStates() {
         if (node.type === "group") {
           return hideGroupNode(node);
         }
-        return {...node, selected: false};
+        return { ...node, selected: false };
       });
     });
     setSelectedEdges([]);
-    setEdges(prevEdges => prevEdges.map(edge => ({...edge, selected: false})));
+    setEdges(prevEdges => prevEdges.map(edge => ({ ...edge, selected: false })));
   }, [setSelectedNodes, selectedNodesRef, setUserSelectedNodes, userSelectedNodesRef, setNodes, setSelectedEdges]);
 
   return {
@@ -393,8 +398,9 @@ function useCreateDiagramControllerIndependentOnActionsAndContext(
   [setEdges, setSelectedEdges]);
 
   useEffect(() => {
-    if(!canvasHighlighting.isHighlightingOn) {
-      setHighlightingStylesBasedOnSelection(reactFlowInstance, selectedNodes, selectedEdges, setNodes, setEdges);
+    if (!canvasHighlighting.isHighlightingOn) {
+      setHighlightingStylesBasedOnSelection(
+        reactFlowInstance.getNode, selectedNodes, selectedEdges, setNodes, setEdges);
     }
   }, [reactFlowInstance, setNodes, setEdges, selectedNodes, selectedEdges, canvasHighlighting.isHighlightingOn]);
 
@@ -470,22 +476,24 @@ function useCreateDiagramControllerDependentOnActionsAndContext(
   const { onOpenEdgeToolbar, onOpenCanvasMenu, alignmentController, onNodesChange } = createdPartOfDiagramController;
 
   const context = useMemo(() => createDiagramContext(
-    api, onOpenEdgeToolbar, onOpenCanvasMenu, canvasMenu?.menuContent ?? null, setCanvasMenu, cleanSelection, selectedNodes, selectedEdges, userSelectedNodes),
-  [api, onOpenEdgeToolbar, onOpenCanvasMenu, canvasMenu, setCanvasMenu, cleanSelection, selectedNodes, selectedEdges, userSelectedNodes]
+    api, onOpenEdgeToolbar, onOpenCanvasMenu, canvasMenu?.menuContent ?? null,
+    setCanvasMenu, cleanSelection, selectedNodes, selectedEdges, userSelectedNodes),
+  [api, onOpenEdgeToolbar, onOpenCanvasMenu, canvasMenu, setCanvasMenu, cleanSelection,
+    selectedNodes, selectedEdges, userSelectedNodes]
   );
 
   const canvasHighlighting = useExplorationCanvasHighlightingController(setNodes, setEdges);
 
   const setSelectedNodesThroughOnNodesChange = useCallback((newlySelectedNodes: string[], newlyUnselectedNodes: string[]) => {
     const changes: NodeChange<NodeType>[] = [artificialChange];
-    for(const newSelectedNode of newlySelectedNodes) {
+    for (const newSelectedNode of newlySelectedNodes) {
       changes.push({
         id: newSelectedNode,
         type: "select",
         selected: true
       });
     }
-    for(const newUnselectedNode of newlyUnselectedNodes) {
+    for (const newUnselectedNode of newlyUnselectedNodes) {
       changes.push({
         id: newUnselectedNode,
         type: "select",
@@ -497,7 +505,7 @@ function useCreateDiagramControllerDependentOnActionsAndContext(
   }, [onNodesChange]);
 
   const actions = useMemo(() => createActions(reactFlowInstance, setNodes, setEdges,
-    alignmentController, context,selectedNodes, setSelectedNodesThroughOnNodesChange,
+    alignmentController, context, selectedNodes, setSelectedNodesThroughOnNodesChange,
     setSelectedEdges, canvasHighlighting.changeHighlight, groups, setGroups,
     setNodeToGroupMapping, cleanSelection),
   [reactFlowInstance, setNodes, setEdges, alignmentController, context,
@@ -530,10 +538,13 @@ export function useDiagramController(api: UseDiagramType): UseDiagramControllerT
   const reactStates = useCreateReactStates();
   // We can use useStore get low level access.
 
-  // TODO RadStr: Actually it would be better if we grouped the controller parts as in the reactflow reference - https://reactflow.dev/api-reference/react-flow
   const reactFlowInstance = useReactFlow<NodeType, EdgeType>();
-  const independentPartOfDiagramController = useCreateDiagramControllerIndependentOnActionsAndContext(api, reactFlowInstance, reactStates);
-  const dependentPartOfDiagramController = useCreateDiagramControllerDependentOnActionsAndContext(api, reactFlowInstance, reactStates, independentPartOfDiagramController);
+  const independentPartOfDiagramController =
+    useCreateDiagramControllerIndependentOnActionsAndContext(
+      api, reactFlowInstance, reactStates);
+  const dependentPartOfDiagramController =
+    useCreateDiagramControllerDependentOnActionsAndContext(
+      api, reactFlowInstance, reactStates, independentPartOfDiagramController);
 
   return {
     nodes: reactStates.nodes,
@@ -561,8 +572,7 @@ export function useDiagramController(api: UseDiagramType): UseDiagramControllerT
   };
 }
 
-// TODO RadStr: Remove the method later probably
-// for now keep it, since I might use it (at least for debugging)
+// For now keep it, since I might use it (at least for debugging)
 function createOnSelectionStartHandler(
   _cleanSelection: () => void,
   _selectedNodes: string[],
@@ -612,9 +622,9 @@ const findNodesRepresentedBySameClass = (
   node: NodeType
 ) => {
   const nodesWithSameRepresented = [];
-  for(const nodeInDiagram of reactFlowInstance.getNodes()) {
+  for (const nodeInDiagram of reactFlowInstance.getNodes()) {
     // Also handles the case when nodeInDiagram === node
-    if(nodeInDiagram.data.externalIdentifier === node.data.externalIdentifier) {
+    if (nodeInDiagram.data.externalIdentifier === node.data.externalIdentifier) {
       nodesWithSameRepresented.push(nodeInDiagram.data.identifier);
     }
   }
@@ -633,7 +643,7 @@ const createOnNodeDoubleClickHandler = (
   openGroupMenu: (groupIdentifier: string, canvasPosition: Position) => void,
 ) => {
   return (mouseEvent: React.MouseEvent, node: Node) => {
-    if(node.type === "group") {
+    if (node.type === "group") {
       const position = reactflowInstance.screenToFlowPosition({
         x: mouseEvent.clientX,
         y: mouseEvent.clientY,
@@ -700,14 +710,15 @@ const createNodesChangeHandler = (
     let changes = nodeChanges as NodeChange<NodeType>[];
     const isArtificiallyCalled = isOnNodesChangeArtificiallyCalled(changes);
 
-    if(handleStartOfGroupDraggingThroughGroupNode(nodes, changes, groups)) {
+    if (handleStartOfGroupDraggingThroughGroupNode(nodes, changes, groups)) {
       return;
     }
-    if(handleGroupDraggingThroughNotSelectedNode(changes, userSelectedNodesRef, isSelectingThroughCtrl, setNodes,
+    if (handleGroupDraggingThroughNotSelectedNode(changes, userSelectedNodesRef, isSelectingThroughCtrl, setNodes,
       setUserSelectedNodes, setSelectedNodes, groups, selectedNodes, selectedNodesRef)) {
       return;
     }
-    const extractedDataFromChanges = extractDataFromChanges(changes, groups, nodeToGroupMapping, selectedNodesRef, nodes);
+    const extractedDataFromChanges = extractDataFromChanges(
+      changes, groups, nodeToGroupMapping, selectedNodesRef, nodes);
 
     // Another special case for ("pink") group node -
     // without this - if we:
@@ -715,13 +726,15 @@ const createNodesChangeHandler = (
     // shift select part of them,
     // move the shift selection,
     // move the not selected node in group,
-    // Then if we move some other node, which was not part of the selection or groups, we will keep one of the groups in the selection
+    // Then if we move some other node, which was not part of the selection or groups, we will keep one of the groups
+    // in the selection
     // The issue comes from the fact that by dragging the other node we get changes which selects all the other nodes
     // (so alternative solution could be to repair/disable such selection changes, but this would bring question
     // how should the resulting selection look. So we keep it this way.)
-    if(!isArtificiallyCalled && !isSelecting && selectedNodesRef.current.length > 0) {
-      const newlySelected = changes.findIndex(change => change.type === "select" && change.selected && !selectedNodesRef.current.includes(change.id));
-      if(newlySelected !== -1) {
+    if (!isArtificiallyCalled && !isSelecting && selectedNodesRef.current.length > 0) {
+      const newlySelected = changes.findIndex(
+        change => change.type === "select" && change.selected && !selectedNodesRef.current.includes(change.id));
+      if (newlySelected !== -1) {
         cleanSelection();
       }
     }
@@ -783,15 +796,15 @@ const createNodesChangeHandler = (
 
     // Because we are dragging nodes which are in groups and are not actually part of selection
     // we can not use onDragStopHandler, but have to perform the update of visual model here.
-    if(extractedDataFromChanges.stoppedDragging) {
+    if (extractedDataFromChanges.stoppedDragging) {
       // At the end of the node drag we report changes in the positions.
       const visualModelChanges: Record<string, Position> = {};
       for (const change of changes) {
-        if(change.type !== "position") {
+        if (change.type !== "position") {
           continue;
         }
         const node = nodes.find(node => node.id === change.id);
-        if(node === undefined || node.type === "group" || change.position === undefined) {
+        if (node === undefined || node.type === "group" || change.position === undefined) {
           continue;
         }
         visualModelChanges[change.id] = change.position;
@@ -812,9 +825,9 @@ const handleStartOfGroupDraggingThroughGroupNode = (
   groups: Record<string, NodeIdentifierWithType[]>,
 ): boolean => {
   const groupCount = Object.entries(groups).length;
-  if(groupCount > 0 && nodes.length === changes.length) {
+  if (groupCount > 0 && nodes.length === changes.length) {
     const notSelectionChanges = changes.filter(change => change.type !== "select" || change.selected);
-    if(notSelectionChanges.length === 0) {
+    if (notSelectionChanges.length === 0) {
       return true;
     }
   }
@@ -837,17 +850,17 @@ const handleGroupDraggingThroughNotSelectedNode = (
   selectedNodes: string[],
   selectedNodesRef: React.MutableRefObject<string[]>,
 ): boolean => {
-  if(!isSelectingThroughCtrl && changes.length === userSelectedNodesRef.current.length + 1 && userSelectedNodesRef.current.length > 0) {
+  if (!isSelectingThroughCtrl && changes.length === userSelectedNodesRef.current.length + 1 && userSelectedNodesRef.current.length > 0) {
     let isPossibleSelectionKeeper: boolean = true;
     let newlySelected: NodeSelectionChange | null = null;
-    for(const change of changes) {
-      if(change.type !== "select") {
+    for (const change of changes) {
+      if (change.type !== "select") {
         isPossibleSelectionKeeper = false;
         break;
       }
 
-      if(change.selected) {
-        if(newlySelected !== null) {
+      if (change.selected) {
+        if (newlySelected !== null) {
           isPossibleSelectionKeeper = false;
           break;
         }
@@ -856,15 +869,15 @@ const handleGroupDraggingThroughNotSelectedNode = (
       }
     }
 
-    if(newlySelected !== null && isPossibleSelectionKeeper) {
+    if (newlySelected !== null && isPossibleSelectionKeeper) {
       const isDraggingThroughGroup = isGroup(newlySelected.id, groups);
-      if(selectedNodes.includes(newlySelected.id) || isDraggingThroughGroup) {
-        if(isDraggingThroughGroup) {
+      if (selectedNodes.includes(newlySelected.id) || isDraggingThroughGroup) {
+        if (isDraggingThroughGroup) {
           setNodes(prevNodes => applyNodeChanges(changes, prevNodes));
           setUserSelectedNodes(_ => []);
           setSelectedNodes(prevSelectedNodes => {
             let newSelectedNodes: string[];
-            if(prevSelectedNodes.includes(newlySelected.id)) {
+            if (prevSelectedNodes.includes(newlySelected.id)) {
               newSelectedNodes = [...prevSelectedNodes];
             }
             else {
@@ -881,7 +894,7 @@ const handleGroupDraggingThroughNotSelectedNode = (
           setUserSelectedNodes(_ => [newlySelected.id]);
           setSelectedNodes(prevSelectedNodes => {
             let newSelectedNodes: string[];
-            if(prevSelectedNodes.includes(newlySelected.id)) {
+            if (prevSelectedNodes.includes(newlySelected.id)) {
               newSelectedNodes = [...prevSelectedNodes];
             }
             else {
@@ -907,7 +920,7 @@ const flattenGroupStructure = (
 ): string[] => {
   const onlyNodes: string[] = [];
   identifiersToFlatten.forEach(identifier => {
-    if(isGroup(identifier, groups)) {
+    if (isGroup(identifier, groups)) {
       onlyNodes.push(...flattenGroupStructure(groups[identifier].map(groupContent => groupContent.identifier), groups));
     }
     else {
@@ -935,28 +948,28 @@ const findUnfinishedGroupUnselections = (
   const nodesWhichWereActuallyNotUnselected: string[] = [];
   const groupToUnselectedCountMap: Record<string, number> = {};
   const groupToUnselectedMap: Record<string, string[]> = {};
-  for(const newlyUnselectedNode of unselectChanges) {
+  for (const newlyUnselectedNode of unselectChanges) {
     const topLevelGroup = findTopLevelGroup(newlyUnselectedNode, groups, nodeToGroupMapping);
-    if(topLevelGroup === null) {
+    if (topLevelGroup === null) {
       continue;
     }
-    if(groupToUnselectedMap[topLevelGroup] === undefined) {
+    if (groupToUnselectedMap[topLevelGroup] === undefined) {
       groupToUnselectedMap[topLevelGroup] = [];
     }
     groupToUnselectedMap[topLevelGroup].push(newlyUnselectedNode);
 
-    if(groupToUnselectedCountMap[topLevelGroup] === undefined) {
+    if (groupToUnselectedCountMap[topLevelGroup] === undefined) {
       groupToUnselectedCountMap[topLevelGroup] = 0;
     }
     groupToUnselectedCountMap[topLevelGroup]++;
   }
-  for(const newlySelectedNode of nodeSelectChanges) {
+  for (const newlySelectedNode of nodeSelectChanges) {
     const topLevelGroup = findTopLevelGroup(newlySelectedNode, groups, nodeToGroupMapping);
 
-    if(topLevelGroup === null) {
+    if (topLevelGroup === null) {
       continue;
     }
-    if(groupToUnselectedCountMap[topLevelGroup] === undefined) {
+    if (groupToUnselectedCountMap[topLevelGroup] === undefined) {
       continue;
     }
     groupToUnselectedCountMap[topLevelGroup]--;
@@ -968,13 +981,13 @@ const findUnfinishedGroupUnselections = (
     let userSelectedNodesInGroupCountBefore = 0;
     // Using previouslyUserSelectedNodes is necessary, using passed in userSelectedNodes from caller is not enough -
     // it is behind and we will get incorrect data if we drag for longer time
-    for(const previouslyUserSelectedNode of userSelectedNodesRef.current) {
-      if(flattenedGroup.includes(previouslyUserSelectedNode)) {
+    for (const previouslyUserSelectedNode of userSelectedNodesRef.current) {
+      if (flattenedGroup.includes(previouslyUserSelectedNode)) {
         userSelectedNodesInGroupCountBefore++;
       }
     }
 
-    if(userSelectedNodesInGroupCountBefore > unselectedNodesCount) {
+    if (userSelectedNodesInGroupCountBefore > unselectedNodesCount) {
       newlyUnselectedNodesBasedOnGroups = newlyUnselectedNodesBasedOnGroups.filter(unselected => !flattenedGroup.includes(unselected));
       nodesWhichWereActuallyNotUnselected.push(...Object.values(groupToUnselectedMap[groupIdentifier]));
     }
@@ -989,7 +1002,7 @@ const findUnfinishedGroupUnselections = (
 const artificialChange: NodePositionChange = {
   id: "artificialChange",
   type: "position",
-  position: {x: 1234, y: 2345},
+  position: { x: 1234, y: 2345 },
 }
 
 /**
@@ -997,7 +1010,7 @@ const artificialChange: NodePositionChange = {
  * If so it is removed true is returned.
  */
 const isOnNodesChangeArtificiallyCalled = (changes: NodeChange[]) => {
-  if(changes.length > 0 && isEqual(changes[0], artificialChange)) {
+  if (changes.length > 0 && isEqual(changes[0], artificialChange)) {
     changes.shift();
     return true;
   }
@@ -1024,37 +1037,28 @@ const extractDataFromChanges = (
   for (const change of changes) {
     let isSelected: boolean | null = null;
     let changeId: string = "";
-    if(change.type === "select") {
+    if (change.type === "select") {
       isSelected = change.selected;
       changeId = change.id;
     }
-    else if(change.type === "position") {
-      if(change.dragging !== true) {
-        // TODO RadStr: Commented code
-        // isSelected = false;
-        // changeId = change.id;
-        // shouldUnselectEverything = true;
-        if(change.dragging === false) {
+    else if (change.type === "position") {
+      if (change.dragging !== true) {
+        if (change.dragging === false) {
           stoppedDragging = true;
         }
       }
-      else if(isGroup(change.id, groups)) {
+      else if (isGroup(change.id, groups)) {
         isSelected = true;
         changeId = change.id;
       }
     }
-    else if(change.type === "remove") {
+    else if (change.type === "remove") {
       isSelected = false;
       changeId = change.id;
     }
-    // TODO RadStr: Commented code
-    // else if(change.type === "replace") {
-    //   isSelected = false;
-    //   changeId = change.id;
-    // }
 
-    if(isSelected !== null) {
-      if(isSelected) {
+    if (isSelected !== null) {
+      if (isSelected) {
         nodeSelectChanges.push(changeId);
       }
       else {
@@ -1062,16 +1066,16 @@ const extractDataFromChanges = (
       }
 
       const groupIdentifier = findTopLevelGroup(changeId, groups, nodeToGroupMapping);
-      if(groupIdentifier !== null) {
-        if(groupsNewlyContainedInSelectionChange[groupIdentifier] === true) {
+      if (groupIdentifier !== null) {
+        if (groupsNewlyContainedInSelectionChange[groupIdentifier] === true) {
           continue;
         }
 
         const flattenedGroup = flattenGroupStructure([groupIdentifier], groups);
-        if(isSelected) {
+        if (isSelected) {
           debug.push(...groups[groupIdentifier]);
           for (const nodeInGroup of flattenedGroup) {
-            if(nodeInGroup !== changeId && !selectedNodesRef.current.includes(nodeInGroup)) {
+            if (nodeInGroup !== changeId && !selectedNodesRef.current.includes(nodeInGroup)) {
               newlySelectedNodesBasedOnGroups.push(nodeInGroup);
               groupsNewlyContainedInSelectionChange[groupIdentifier] = true;
             }
@@ -1079,7 +1083,7 @@ const extractDataFromChanges = (
         }
         else {
           for (const nodeInGroup of flattenedGroup) {
-            if(nodeInGroup !== changeId && selectedNodesRef.current.includes(nodeInGroup)) {
+            if (nodeInGroup !== changeId && selectedNodesRef.current.includes(nodeInGroup)) {
               newlyUnselectedNodesBasedOnGroups.push(nodeInGroup);
               groupsNewlyContainedInSelectionChange[groupIdentifier] = true;
             }
@@ -1089,11 +1093,11 @@ const extractDataFromChanges = (
 
     }
   }
-  if(shouldUnselectEverything) {
-    for(const selectedNode of selectedNodesRef.current) {
+  if (shouldUnselectEverything) {
+    for (const selectedNode of selectedNodesRef.current) {
       newlyUnselectedNodesBasedOnGroups.push(selectedNode);
-      for(const node of nodes) {
-        if(node.selected === true && isGroup(node.id, groups)) {
+      for (const node of nodes) {
+        if (node.selected === true && isGroup(node.id, groups)) {
           changes.push({
             id: node.id,
             type: "select",
@@ -1127,12 +1131,15 @@ const updateChangesByGroupDragEvents = (
   nodeToGroupMapping: Record<string, string>,
   selectedNodesRef: React.MutableRefObject<string[]>,
 ) => {
-  const draggedGroups = [...new Set(changes.filter(change => change.type === "position").map(change => findTopLevelGroup(change.id, groups, nodeToGroupMapping))
-    .concat(selectedNodesRef.current.map(node => findTopLevelGroup(node, groups, nodeToGroupMapping))).filter(group => group !== null))];
-  if(draggedGroups.length > 0) {
+  const draggedGroups = [...new Set(
+    changes.filter(change => change.type === "position")
+      .map(change => findTopLevelGroup(change.id, groups, nodeToGroupMapping))
+      .concat(selectedNodesRef.current.map(node => findTopLevelGroup(node, groups, nodeToGroupMapping)))
+      .filter(group => group !== null))];
+  if (draggedGroups.length > 0) {
     for (const change of changes) {
-      if(change.type === "position") {
-        if(change.position === undefined) {
+      if (change.type === "position") {
+        if (change.position === undefined) {
           continue;
         }
 
@@ -1144,13 +1151,13 @@ const updateChangesByGroupDragEvents = (
         positionDifference.x -= sourceNode?.position?.x ?? 0;
         positionDifference.y -= sourceNode?.position?.y ?? 0;
 
-        for(const node of nodes) {
+        for (const node of nodes) {
           const isChangeAlreadyPresent = changes.find(change => change.type === "position" && change.id === node.id);
-          if(isChangeAlreadyPresent) {
+          if (isChangeAlreadyPresent) {
             continue;
           }
-          if(!((selectedNodesRef.current.includes(node.id) ||
-              (isGroup(node.id, groups) && draggedGroups.includes(node.id))))) {
+          if (!((selectedNodesRef.current.includes(node.id) ||
+            (isGroup(node.id, groups) && draggedGroups.includes(node.id))))) {
             continue;
           }
 
@@ -1159,8 +1166,8 @@ const updateChangesByGroupDragEvents = (
             y: node.position.y + positionDifference.y,
           };
           // Another specific case, because of having old state - the node wasn't initialized yet to correct value
-          if(node.position.x === UNINITIALIZED_VALUE_GROUP_POSITION) {
-            if(groups[node.id] === undefined) {
+          if (node.position.x === UNINITIALIZED_VALUE_GROUP_POSITION) {
+            if (groups[node.id] === undefined) {
               console.warn("Node was supposed to be group but isn't");
               continue;
             }
@@ -1194,7 +1201,7 @@ const updateUserSelectedNodesBasedOnNodeChanges = (
   // Nothing happened, don't change the value.
   // This saves us recreation of useCallbacks dependent on userSelectedNodes
   // (for example creation of DiagramContext)
-  if(nodeSelectChanges.length === 0 && unselectChanges.length === 0) {
+  if (nodeSelectChanges.length === 0 && unselectChanges.length === 0) {
     return previouslyUserSelectedNodes;
   }
 
@@ -1222,7 +1229,7 @@ const updateSelectedNodesBasedOnNodeChanges = (
   // Nothing happened, don't change the value.
   // This saves us recreation of useCallbacks dependent on selectedNodes
   // (for example creation of DiagramContext)
-  if(nodeSelectChanges.length === 0 && unselectChanges.length === 0) {
+  if (nodeSelectChanges.length === 0 && unselectChanges.length === 0) {
     return previouslySelectedNodes;
   }
   let newSelectedNodes = previouslySelectedNodes.filter(newSelectedNode => !newlyUnselectedNodesBasedOnGroups.includes(newSelectedNode));
@@ -1246,10 +1253,10 @@ const updateNodesBasedOnNodeChanges = (
   groups: Record<string, NodeIdentifierWithType[]>,
 ) => {
   const updatedNodes = applyNodeChanges(changes, prevNodes);
-  if(Object.entries(groupsNewlyContainedInSelectionChange).length > 0) {
-    for(const group of Object.keys(groupsNewlyContainedInSelectionChange)) {
+  if (Object.entries(groupsNewlyContainedInSelectionChange).length > 0) {
+    for (const group of Object.keys(groupsNewlyContainedInSelectionChange)) {
       const groupNodeIndex = updatedNodes.findIndex(node => node.id === group);
-      if(groupNodeIndex === -1) {
+      if (groupNodeIndex === -1) {
         continue;
       }
 
@@ -1258,31 +1265,33 @@ const updateNodesBasedOnNodeChanges = (
     }
   }
 
-  for(const newlyUnselectedNode of newlyUnselectedNodesBasedOnGroups) {
+  for (const newlyUnselectedNode of newlyUnselectedNodesBasedOnGroups) {
     const processedGroups: Record<string, true> = {};
     const group = findTopLevelGroup(newlyUnselectedNode, groups, nodeToGroupMapping);
-    if(group === null) {
+    if (group === null) {
       continue;
     }
-    if(processedGroups[group] === undefined) {
+    if (processedGroups[group] === undefined) {
       processedGroups[group] = true;
       const groupNodeIndex = updatedNodes.findIndex(node => node.id === group);
-      if(groupNodeIndex === -1) {
+      if (groupNodeIndex === -1) {
         continue;
       }
-      if(updatedNodes[groupNodeIndex].hidden !== true) {
+      if (updatedNodes[groupNodeIndex].hidden !== true) {
         updatedNodes[groupNodeIndex] = hideGroupNode(updatedNodes[groupNodeIndex]);
       }
     }
   }
 
   // Rerender visible group nodes when dimension changed - needed for layouting
-  const nodesWithGroupsToRerender = changes.filter(change => change.type === "dimensions" && nodeToGroupMapping[change.id] !== undefined);
-  if(nodesWithGroupsToRerender !== undefined) {
-    for(const node of nodesWithGroupsToRerender) {
+  const nodesWithGroupsToRerender = changes.filter(
+    change => change.type === "dimensions" && nodeToGroupMapping[change.id] !== undefined);
+  if (nodesWithGroupsToRerender !== undefined) {
+    for (const node of nodesWithGroupsToRerender) {
       const topLevelGroup = findTopLevelGroup((node as NodeDimensionChange).id, groups, nodeToGroupMapping);
-      const topLevelGroupIndex = updatedNodes.findIndex(group => group.type === "group" && topLevelGroup === group.id && group.hidden !== true);
-      if(topLevelGroupIndex !== -1) {
+      const topLevelGroupIndex = updatedNodes.findIndex(
+        group => group.type === "group" && topLevelGroup === group.id && group.hidden !== true);
+      if (topLevelGroupIndex !== -1) {
         updatedNodes[topLevelGroupIndex] = showGroupNode(updatedNodes[topLevelGroupIndex], groups, updatedNodes);
       }
     }
@@ -1314,23 +1323,23 @@ const setSelectedBasedOnNewData = (
   setSelected(previouslySelected => {
     const newlySelected: string[] = [];
     const newlyUnselected: string[] = [...newlyRemoved];
-    for(const element of newData) {
+    for (const element of newData) {
       const isElementPreviouslySelected = previouslySelected.includes(element.id);
-      if(element.selected === true && !isElementPreviouslySelected) {
+      if (element.selected === true && !isElementPreviouslySelected) {
         newlySelected.push(element.id);
       }
-      else if(element.selected !== true && isElementPreviouslySelected) {
+      else if (element.selected !== true && isElementPreviouslySelected) {
         newlyUnselected.push(element.id);
       }
     }
 
-    if(newlySelected.length === 0 && newlyUnselected.length === 0) {
+    if (newlySelected.length === 0 && newlyUnselected.length === 0) {
       return previouslySelected;
     }
     const result = previouslySelected.filter(previouslySelectedElement => !newlyUnselected.includes(previouslySelectedElement));
     result.push(...newlySelected);
 
-    if(selectedNodesRef !== null) {
+    if (selectedNodesRef !== null) {
       selectedNodesRef.current = result;
     }
 
@@ -1372,13 +1381,17 @@ const createConnectEndHandler = (
       return;
     }
     const targetIsPane = (event.target as Element).classList.contains("react-flow__pane");
-    const flowPosition = reactFlow.screenToFlowPosition({x: (event as unknown as React.MouseEvent)?.clientX, y: (event as unknown as React.MouseEvent)?.clientY});
+    const flowPosition = reactFlow.screenToFlowPosition({
+      x: (event as unknown as React.MouseEvent)?.clientX,
+      y: (event as unknown as React.MouseEvent)?.clientY,
+    });
     if (targetIsPane) {
       api.callbacks().onCreateConnectionToNothing(source.data, flowPosition);
     } else {
       if (connection.toNode === null) {
         // If user have not attached the node to the handle, we get no target.
-        const nodes = reactFlow.getIntersectingNodes({ x: positionRelativeToViewport.x, y: positionRelativeToViewport.y, width: 1, height: 1 });
+        const nodes = reactFlow.getIntersectingNodes(
+          { x: positionRelativeToViewport.x, y: positionRelativeToViewport.y, width: 1, height: 1 });
         if (nodes.length === 0) {
           api.callbacks().onCreateConnectionToNothing(source.data, flowPosition);
         } else {
@@ -1462,8 +1475,8 @@ const createGroups = (
   previousGroups: Record<string, NodeIdentifierWithType[]>,
   groupsToAdd: GroupWithContent[]
 ) => {
-  const newGroups = {...previousGroups};
-  groupsToAdd.forEach(({group, content}) => {
+  const newGroups = { ...previousGroups };
+  groupsToAdd.forEach(({ group, content }) => {
     const contentWithType = content.map(element => ({
       identifier: element,
       isGroup: isGroup(element, previousGroups),
@@ -1478,8 +1491,8 @@ const createNodeToGroupMapping = (
   previousMapping: Record<string, string>,
   groupsToAdd: GroupWithContent[]
 ) => {
-  const newNodeToGroupMapping = {...previousMapping};
-  groupsToAdd.forEach(({group, content}) => {
+  const newNodeToGroupMapping = { ...previousMapping };
+  groupsToAdd.forEach(({ group, content }) => {
     content.forEach(identifier => {
       newNodeToGroupMapping[identifier] = newNodeToGroupMapping[identifier] ?? group.identifier;
     });
@@ -1493,9 +1506,9 @@ const shouldBreakSelection = (
 ) => {
 
   const shouldBreak = !isEqual(omit(prevNode.data, ["position"]), omit(nextNode.data, ["position"])) ||
-                      nextNode.position.x !== prevNode.position.x ||
-                      nextNode.position.y !== prevNode.position.y ||
-                      nextNode.data.position.anchored !== prevNode.data.position.anchored;
+    nextNode.position.x !== prevNode.position.x ||
+    nextNode.position.y !== prevNode.position.y ||
+    nextNode.data.position.anchored !== prevNode.data.position.anchored;
   return shouldBreak;
 }
 
@@ -1541,21 +1554,21 @@ const createActions = (
       setNodes(prevNodes => {
         const newNodes = [...prevNodes];
         const nodeToGroupMapping = createNodeToGroupMapping({}, groups);
-        const nodeToGroupMappingCopy = {...nodeToGroupMapping};
+        const nodeToGroupMappingCopy = { ...nodeToGroupMapping };
         const groupIdentifiers = groups.map(group => group.group.identifier);
         // Not the most effective but there are only few groups so it doesn't matter
         // We have to collect the group nodes separately and in the down to top order,
         // so we can refer to them later in method if we created more than 1.
         const groupProcessingOrdering = [];
-        while(groupIdentifiers.length > 0) {
-          for(let i = groupIdentifiers.length - 1; i >= 0; i--) {
+        while (groupIdentifiers.length > 0) {
+          for (let i = groupIdentifiers.length - 1; i >= 0; i--) {
             const groupIdentifier = groupIdentifiers[i];
             if (nodeToGroupMappingCopy[groupIdentifier] === undefined) {
               groupProcessingOrdering.push(groupIdentifier);
               delete nodeToGroupMappingCopy[groupIdentifier];
-              for(const possibleTopLevelGroup of groupIdentifiers) {
+              for (const possibleTopLevelGroup of groupIdentifiers) {
                 const isNewTopLevelGroup = nodeToGroupMappingCopy[possibleTopLevelGroup] === groupIdentifier;
-                if(isNewTopLevelGroup) {
+                if (isNewTopLevelGroup) {
                   delete nodeToGroupMappingCopy[possibleTopLevelGroup];
                 }
               }
@@ -1566,26 +1579,31 @@ const createActions = (
         groupProcessingOrdering.reverse();
 
         groupProcessingOrdering.forEach(currGroup => {
-          const foundGroup = groups.find(({group}) => group.identifier === currGroup);
-          if(foundGroup === undefined) {
+          const foundGroup = groups.find(({ group }) => group.identifier === currGroup);
+          if (foundGroup === undefined) {
             console.warn("Programmer error - missing group which should be there");
             return;
           }
           const { group, content } = foundGroup;
           const isTopLevelGroup = nodeToGroupMapping[group.identifier] === undefined;
-          const groupNode = createGroupNode(group.identifier, prevNodes.filter(node => content.includes(node.id)), isTopLevelGroup ? hideAddedTopLevelGroups : true);
+          const groupNode = createGroupNode(
+            group.identifier,
+            prevNodes.filter(node => content.includes(node.id)),
+            isTopLevelGroup ? hideAddedTopLevelGroups : true);
           newNodes.push(groupNode);
         });
 
-        groups.forEach(({group, content}) => {
-          for(const nodeInGroupIdentifier of content) {
+        groups.forEach(({ group, content }) => {
+          for (const nodeInGroupIdentifier of content) {
             const nodeInGroupIndex = newNodes.findIndex(node => node.id === nodeInGroupIdentifier);
-            if(nodeInGroupIndex === -1) {
-              console.error("Could not find node which is part of group in the list of diagram nodes", {newNodes, group, content, nodeInGroupIdentifier});
+            if (nodeInGroupIndex === -1) {
+              console.error(
+                "Could not find node which is part of group in the list of diagram nodes",
+                { newNodes, group, content, nodeInGroupIdentifier });
               continue;
             }
 
-            if(newNodes[nodeInGroupIndex].type === "group") {
+            if (newNodes[nodeInGroupIndex].type === "group") {
               newNodes[nodeInGroupIndex] = hideGroupNode(newNodes[nodeInGroupIndex]);
             }
             else {
@@ -1600,18 +1618,18 @@ const createActions = (
       console.log("Diagram.removeGroups", { groups });
 
       setGroups(prevGroups => {
-        const newGroups = {...prevGroups};
-        for(const group of groups) {
+        const newGroups = { ...prevGroups };
+        for (const group of groups) {
           delete newGroups[group];
         }
         return newGroups;
       });
 
       setNodeToGroupMapping(prevMapping => {
-        const newNodeToGroupMapping = {...prevMapping};
+        const newNodeToGroupMapping = { ...prevMapping };
         // Remove the references to the groups for nodes lying inside them
         Object.keys(newNodeToGroupMapping).forEach(nodeIdentifier => {
-          if(groups.includes(newNodeToGroupMapping[nodeIdentifier])) {
+          if (groups.includes(newNodeToGroupMapping[nodeIdentifier])) {
             delete newNodeToGroupMapping[nodeIdentifier];
           }
         });
@@ -1620,13 +1638,13 @@ const createActions = (
 
       setNodes(prevNodes => {
         return prevNodes.map(node => {
-          if(groups.includes(node.id)) {
+          if (groups.includes(node.id)) {
             return null;
           }
-          if(node.type === "group") {
+          if (node.type === "group") {
             return node;
           }
-          if(node.data.group !== null && groups.includes(node.data.group)) {
+          if (node.data.group !== null && groups.includes(node.data.group)) {
             return {
               ...node,
               selected: false,
@@ -1647,14 +1665,14 @@ const createActions = (
       console.log("Diagram.setGroup", { group, content });
 
       setGroups(prevGroups => {
-        const createdGroups = createGroups(prevGroups, [{group, content}]);
+        const createdGroups = createGroups(prevGroups, [{ group, content }]);
         return createdGroups;
       });
 
       setNodeToGroupMapping(prevMapping => {
-        const newNodeToGroupMapping = {...prevMapping};
+        const newNodeToGroupMapping = { ...prevMapping };
         Object.keys(prevMapping).forEach(key => {
-          if(prevMapping[key] === group.identifier && !content.includes(key)) {
+          if (prevMapping[key] === group.identifier && !content.includes(key)) {
             delete newNodeToGroupMapping[key];
           }
         })
@@ -1665,15 +1683,16 @@ const createActions = (
       });
 
       setNodes(prevNodes => {
-        const newGroupNode = createGroupNode(group.identifier, prevNodes.filter(node => content.includes(node.id)), true);
+        const newGroupNode = createGroupNode(
+          group.identifier, prevNodes.filter(node => content.includes(node.id)), true);
         return prevNodes.map(node => {
-          if(node.id === group.identifier) {
+          if (node.id === group.identifier) {
             return newGroupNode;
           }
-          if(node.type === "group") {
+          if (node.type === "group") {
             return hideGroupNode(node);
           }
-          if(content.includes(node.id)) {
+          if (content.includes(node.id)) {
             return {
               ...node,
               selected: false,
@@ -1683,7 +1702,7 @@ const createActions = (
               },
             };
           }
-          else if(node.data.group === group.identifier && !content.includes(node.id)) {
+          else if (node.data.group === group.identifier && !content.includes(node.id)) {
             return {
               ...node,
               selected: false,
@@ -1714,7 +1733,8 @@ const createActions = (
       return reactFlow.getNodes().map(node => node.data);
     },
     addNodes(nodes) {
-      reactFlow.addNodes(nodes.map(nodeToNodeType));
+      // We set it directly. Using reactflow may cause "Encountered two children with the same key" warning
+      setNodes(previousNodes => previousNodes.concat(nodes.map(nodeToNodeType)));
       console.log("Diagram.addNodes", nodes.map(item => item.identifier), nodes);
     },
     updateNodes(nodes) {
@@ -1725,23 +1745,23 @@ const createActions = (
       setNodes((prev) => {
         let nothingChanged = true;
         const possibleNewNodes = prev.map(node => {
-          if(changed[node.data.identifier] !== undefined) {
-            if(!shouldBreakSelection(node, changed[node.data.identifier])) {
+          const changedNode = changed[node.data.identifier];
+          if (changedNode !== undefined) {
+            if (!shouldBreakSelection(node, changedNode)) {
               return node;
             }
             nothingChanged = false;
-            // TODO RadStr: We are not using the groups property anyways, so idk
-            if(changed[node.data.identifier].data.group === null) {
-              changed[node.data.identifier].data.group = node.data.group;
+            if (changedNode.data.group === null) {
+              changedNode.data.group = node.data.group;
             }
-            changed[node.data.identifier].selected = node.selected;
-            changed[node.data.identifier].className = node.className;
-            changed[node.data.identifier].style = node.style;
-            return changed[node.data.identifier];
+            changedNode.selected = node.selected;
+            changedNode.className = node.className;
+            changedNode.style = node.style;
+            return changedNode;
           }
           return node;
         });
-        if(nothingChanged) {
+        if (nothingChanged) {
           return prev;
         }
 
@@ -1752,7 +1772,8 @@ const createActions = (
       console.log("Diagram.updateNodesPosition", nodes);
     },
     removeNodes(identifiers) {
-      reactFlow.deleteElements({ nodes: identifiers.map(id => ({ id })) });
+      // Again setting directly instead of using reactFlow.
+      setNodes(previousNodes => previousNodes.filter(previousNode => !identifiers.includes(previousNode.id)));
       console.log("Diagram.removeNodes", identifiers);
     },
     getNodeWidth(identifier) {
@@ -1769,7 +1790,8 @@ const createActions = (
       return [];
     },
     addEdges(edges) {
-      reactFlow.addEdges(edges.map(edgeToEdgeType));
+      // Again directly instead of reactflow.
+      setEdges(previousEdges => previousEdges.concat(edges.map(edgeToEdgeType)));
       console.log("Diagram.addEdges", edges.map(item => item.identifier), edges);
     },
     updateEdges(edges) {
@@ -1787,7 +1809,8 @@ const createActions = (
       console.log("Diagram.setEdgesWaypointPosition", edges);
     },
     removeEdges(identifiers) {
-      reactFlow.deleteElements({ edges: identifiers.map(id => ({ id })) });
+      // Again setting directly instead of using reactFlow.
+      setEdges(previousEdges => previousEdges.filter(previousEdge => !identifiers.includes(previousEdge.id)));
       console.log("Diagram.removeEdges", identifiers);
     },
     //
@@ -1800,11 +1823,11 @@ const createActions = (
       const nodes = reactFlow.getNodes();
       const newlySelectedNodes: string[] = [];
       const newlyUnselectedNodes: string[] = [];
-      for(const node of nodes) {
-        if(node.selected === true && !selectedNodes.includes(node.id)) {
+      for (const node of nodes) {
+        if (node.selected === true && !selectedNodes.includes(node.id)) {
           newlyUnselectedNodes.push(node.id);
         }
-        else if(node.selected !== true && selectedNodes.includes(node.id)) {
+        else if (node.selected !== true && selectedNodes.includes(node.id)) {
           newlySelectedNodes.push(node.id);
         }
       }
@@ -1814,16 +1837,19 @@ const createActions = (
     getSelectedEdges() {
       console.log("Diagram.getSelectedEdges");
       // Have to filter afterwards, because in reactflow the edges' data are optional
-      return reactFlow.getEdges().filter(edge => edge.selected === true).map(edge => edge.data).filter(edge => edge !== undefined);
+      return reactFlow.getEdges()
+        .filter(edge => edge.selected === true)
+        .map(edge => edge.data)
+        .filter(edge => edge !== undefined);
     },
     setSelectedEdges(edges) {
       console.log("Diagram.setSelectedEdges", edges);
       reactFlow.setEdges(prevEdges => {
         return prevEdges.map(edge => {
-          if(edges.find(selectedEdge => selectedEdge === edge.id) !== undefined) {
-            return {...edge, selected: true};
+          if (edges.find(selectedEdge => selectedEdge === edge.id) !== undefined) {
+            return { ...edge, selected: true };
           }
-          return {...edge, selected: false};
+          return { ...edge, selected: false };
         });
       });
 
@@ -1873,15 +1899,19 @@ const createActions = (
       return diagramContentAsSvg(reactFlow.getNodes());
     },
     openDragEdgeToCanvasMenu(sourceNode, canvasPosition) {
-      console.log("openDragEdgeToCanvasToolbar", {sourceNode, canvasPosition});
+      console.log("openDragEdgeToCanvasToolbar", { sourceNode, canvasPosition });
       context?.onOpenCanvasContextMenu(sourceNode.identifier, canvasPosition, CanvasMenuCreatedByEdgeDrag);
     },
     openSelectionActionsMenu(sourceNode, canvasPosition) {
-      console.log("openSelectionActionsMenu", {sourceNode, canvasPosition});
+      console.log("openSelectionActionsMenu", { sourceNode, canvasPosition });
       context?.onOpenCanvasContextMenu(sourceNode.identifier, canvasPosition, SelectionActionsMenu);
     },
+    openAlignmentMenu(sourceNode, canvasPosition) {
+      console.log("openAlignmentMenu", { sourceNode, canvasPosition });
+      context?.onOpenCanvasContextMenu(sourceNode.identifier, canvasPosition, AlignmentMenu);
+    },
     openGroupMenu(groupIdentifier, canvasPosition) {
-      console.log("openGroupMenu", {groupIdentifier, canvasPosition});
+      console.log("openGroupMenu", { groupIdentifier, canvasPosition });
       context?.onOpenCanvasContextMenu(groupIdentifier, canvasPosition, GroupMenu);
     },
     highlightNodesInExplorationModeFromCatalog(nodeIdentifiers, modelOfClassWhichStartedHighlighting) {
@@ -1898,10 +1928,10 @@ const convertViewUsingZoom = (view: ViewportDimensions, zoom: number): void => {
   view.height *= zoomReciprocal;
 };
 
-const nodeToNodeType = (node: ApiNode): NodeType => {
+const nodeToNodeType = (node: DiagramNodeTypes): NodeType => {
   return {
     id: node.identifier,
-    type: EntityNodeName,
+    type: isVisualModelDiagramNode(node) ? VisualModelNodeName : EntityNodeName,
     position: {
       x: node.position.x,
       y: node.position.y,
@@ -1973,7 +2003,8 @@ const focusNodeAction = (reactFlow: ReactFlowContext, node: Node) => {
 
 // Should be superset of the focusNodeAction
 const focusNodesAction = (reactFlow: ReactFlowContext, nodes: Node[]) => {
-  reactFlow.fitView({nodes: nodes,
+  reactFlow.fitView({
+    nodes: nodes,
     duration: 1000,
     minZoom: 0.125
   });
@@ -1983,7 +2014,7 @@ const computeShownNodeMenuType = (
   userSelectedNodes: string[],
   selectedEdges: string[],
 ) => {
-  if(userSelectedNodes.length > 1 || (userSelectedNodes.length === 1 && selectedEdges.length > 0)) {
+  if (userSelectedNodes.length > 1 || (userSelectedNodes.length === 1 && selectedEdges.length > 0)) {
     return NodeMenuType.SelectionMenu;
   }
   else {

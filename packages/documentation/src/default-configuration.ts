@@ -5,31 +5,66 @@ export const defaultConfiguration: DocumentationConfiguration = {
     // [DOCUMENTATION_MAIN_TEMPLATE_PARTIAL]
     specification: `{{> definitions}}
 <!DOCTYPE html>
-  <html>
-    <head>
-      {{> html-head}}
-    </head>
-    <body>
-      <p class="copyright"></p>
-      <section id="abstract">
-        <p>
-          {{#iflng "cs"}}Tento soubor dokumentuje{{lng}}This file documents{{/iflng}}
-          {{#translate label}}<strong>{{translation}}</strong>{{#if otherLang}} (@{{otherLang}}){{/if}}{{else}}<i>{{#iflng "cs"}}beze jména{{lng}}without assigned name{{/iflng}}</i>{{/translate}}.</p>
-      </section>
+<html>
+  <head>
+    {{> html-head}}
+  </head>
+  <body>
+    <p class="copyright"></p>
+    <section id="abstract">
+      <p>
+        {{#iflng "cs"}}Tento soubor dokumentuje{{lng}}This file documents{{/iflng}}
+        {{#translate label}}<strong>{{translation}}</strong>{{#if otherLang}} (@{{otherLang}}){{/if}}{{else}}<i>{{#iflng "cs"}}beze jména{{lng}}without assigned name{{/iflng}}</i>{{/translate}}.</p>
+    </section>
 
+    <section>
+      <h2>{{#iflng "cs"}}Přehled{{lng}}Overview{{/iflng}}</h2>
+
+      {{#each externalArtifacts.svg}}
+        <a href="{{{URL}}}">
+          <figure>
+            <img src="{{{URL}}}" alt="{{translate ./label}}" />
+            <figcaption>{{translate ./label}}</figcaption>
+          </figure>
+        </a>
+      {{/each}}
+    </section>
+
+    {{#if classProfilesByTags.[https://w3id.org/dsv/class-role#main]}}
       <section>
-        <h2>{{#iflng "cs"}}Přehled{{lng}}Overview{{/iflng}}</h2>
+        <h2>{{#iflng "cs"}}Hlavní profily tříd{{lng}}Main class profiles{{/iflng}}</h2>
 
-        {{#each externalArtifacts.svg}}
-          <a href="{{{URL}}}">
-            <figure>
-              <img src="{{{URL}}}" alt="{{translate ./label}}" />
-              <figcaption>{{translate ./label}}</figcaption>
-            </figure>
-          </a>
+        {{#each classProfilesByTags.[https://w3id.org/dsv/class-role#main]}}
+          {{> class-profile}}
         {{/each}}
       </section>
+    {{/if}}
 
+    {{#if classProfilesByTags.[https://w3id.org/dsv/class-role#supportive]}}
+      <section>
+        <h2>{{#iflng "cs"}}Podpůrné profily třídy{{lng}}Supportive class profiles{{/iflng}}</h2>
+
+        {{#each classProfilesByTags.[https://w3id.org/dsv/class-role#supportive]}}
+          {{> class-profile}}
+        {{/each}}
+      </section>
+    {{/if}}
+
+    {{#if (non-empty classProfilesByTags.default)}}
+      <section>
+        {{#if (or classProfilesByTags.[https://w3id.org/dsv/class-role#main] classProfilesByTags.[https://w3id.org/dsv/class-role#supportive])}}
+          <h2>{{#iflng "cs"}}Nezařazené profily tříd{{lng}}Other class profiles{{/iflng}}</h2>
+        {{else}}
+          <h2>{{#iflng "cs"}}Profily tříd{{lng}}Class profiles{{/iflng}}</h2>
+        {{/if}}
+
+        {{#each classProfilesByTags.default}}
+          {{> class-profile}}
+        {{/each}}
+      </section>
+    {{/if}}
+
+    {{#if semanticEntitiesByType.classes}}
       <section>
         <h2>{{#iflng "cs"}}Třídy{{lng}}Classes{{/iflng}}</h2>
 
@@ -38,44 +73,37 @@ export const defaultConfiguration: DocumentationConfiguration = {
             {{> semantic-model-class}}
           {{/ifEquals}}
         {{/each}}
+      </section>
+    {{/if}}
 
-        {{#each locallyDefinedSemanticEntity}}
-          {{#ifEquals type.[0] "class-profile"}}
-            {{> class-profile}}
-          {{/ifEquals}}
-        {{/each}}
-
-        </section>
-
-        <section>
+    {{#if semanticEntitiesByType.relationships}}
+      <section>
         <h2>{{#iflng "cs"}}Vlastnosti{{lng}}Properties{{/iflng}}</h2>
         {{#each locallyDefinedSemanticEntity}}
           {{#ifEquals type.[0] "relationship"}}
             {{> semantic-model-relationship}}
           {{/ifEquals}}
         {{/each}}
+      </section>
+    {{/if}}
 
-        {{#each locallyDefinedSemanticEntity}}
-          {{#ifEquals type.[0] "relationship-profile"}}
+    {{#structureModels}}
+      <section>
+      <h2>
+        {{#iflng "cs"}}Specifikace struktury pro{{lng}}Data structure specification for{{/iflng}}
+        {{translate humanLabel}}
+      </h2>
+      <p>{{translate humanDescription}}</p>
 
-          {{/ifEquals}}
-        {{/each}}
-        </section>
+      {{#artifacts}}{{#getDocumentation}}{{> (useTemplate)}}{{/getDocumentation}}{{/artifacts}}
+      </section>
+    {{/structureModels}}
 
-      {{#structureModels}}
-        <section>
-        <h2>Specifikace struktury pro {{translate humanLabel}}</h2>
-        <p>{{translate humanDescription}}</p>
+    {{> used-prefixes}}
 
-        {{#artifacts}}{{#getDocumentation}}{{> (useTemplate)}}{{/getDocumentation}}{{/artifacts}}
-        </section>
-      {{/structureModels}}
-
-      {{> used-prefixes}}
-
-      {{> attachments}}
-    </body>
-  </html>`,
+    {{> attachments}}
+  </body>
+</html>`,
 
     "semantic-model-relationship": `<section id="{{anchor}}">
   <h4>{{#translate ends.1.name}}{{translation}}{{#if otherLang}} (@{{otherLang}}){{/if}}{{else}}<i>{{#iflng "cs"}}beze jména{{lng}}without assigned name{{/iflng}}</i>{{/translate}}</h4>
@@ -168,6 +196,15 @@ export const defaultConfiguration: DocumentationConfiguration = {
 
   <table class="def">
     <tr>
+      <td>{{#iflng "cs"}}IRI profilovaných tříd{{lng}}Profiled class IRI(s){{/iflng}}</td>
+      <td>
+        {{#each aggregation.conceptIris}}
+          {{#if @index}}<br />{{/if}}
+          <a href="{{{.}}}">{{prefixed .}}</a>
+        {{/each}}
+      </td>
+    </tr>
+    <tr>
       <td>IRI</td>
       <td><a href="{{{iri}}}">{{prefixed iri}}</a></td>
     </tr>
@@ -232,7 +269,7 @@ export const defaultConfiguration: DocumentationConfiguration = {
     <p>{{#iflng "cs"}}Zpětné asociace{{lng}}Backwards associations{{/iflng}}</p>
     <ul>
       {{#each backwardsRelationships}}
-        <li><a href="{{{href id}}}"></a></li>
+        <li>{{#iflng "cs"}}z domény{{lng}}from domain{{/iflng}} <a href="{{{href ends.0.concept}}}"></a> → <a href="{{{href id}}}"></a></li>
       {{/each}}
     </ul>
   {{/if}}
@@ -247,6 +284,15 @@ export const defaultConfiguration: DocumentationConfiguration = {
   <h4>{{#translate aggregation.ends.1.name}}{{translation}}{{#if otherLang}} (@{{otherLang}}){{/if}}{{else}}<i>{{#iflng "cs"}}beze jména{{lng}}without assigned name{{/iflng}}</i>{{/translate}}</h4>
 
   <table class="def">
+    <tr>
+      <td>{{#iflng "cs"}}IRI profilovaných vztahů{{lng}}Profiled relationship IRI(s){{/iflng}}</td>
+      <td>
+        {{#each aggregation.ends.1.conceptIris}}
+          {{#if @index}}<br />{{/if}}
+          <a href="{{{.}}}">{{prefixed .}}</a>
+        {{/each}}
+      </td>
+    </tr>
     <tr>
       <td>IRI</td>
       <td><a href="{{{ends.1.iri}}}">{{prefixed ends.1.iri}}</a></td>
@@ -363,7 +409,7 @@ export const defaultConfiguration: DocumentationConfiguration = {
         </tr>
       {{/if}}
         {{#artifacts}}
-        <tr><td>{{title}}</td><td><a href="{{{relativePath}}}">{{{relativePath}}}</a></td></tr>
+        <tr><td>{{translate title}}</td><td><a href="{{{relativePath}}}">{{relativePathAsText}}</a></td></tr>
         {{/artifacts}}
     </tbody>
   </table>
@@ -375,7 +421,7 @@ export const defaultConfiguration: DocumentationConfiguration = {
     <thead><tr><th>Prefix</th><th>Namespace IRI</th></tr></thead>
     <tbody>
       {{#each usedPrefixes}}
-        <tr><td><code>{{prefix}}</code></td><td><a href={{{iri}}}><code>{{iri}}</code></a></td></tr>
+        <tr><td><code>{{prefix}}</code></td><td><a href="{{{iri}}}"><code>{{iri}}</code></a></td></tr>
       {{/each}}
     </tbody>
   </table>

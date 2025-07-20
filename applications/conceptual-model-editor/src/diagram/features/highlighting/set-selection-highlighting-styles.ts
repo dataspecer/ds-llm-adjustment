@@ -1,9 +1,9 @@
-import { Edge, ReactFlowInstance, getConnectedEdges } from "@xyflow/react";
+import { Edge, getConnectedEdges } from "@xyflow/react";
 import { NodeType, selectMarkerEnd } from "../../diagram-controller";
 import { ReactPrevSetStateType } from "../../utilities";
 
 export const setHighlightingStylesBasedOnSelection = (
-  reactflowInstance: ReactFlowInstance<any, any>,
+  getNode: (id: string) => any,
   selectedNodes: string[],
   selectedEdges: string[],
   setNodes: ReactPrevSetStateType<NodeType[]>,
@@ -21,9 +21,9 @@ export const setHighlightingStylesBasedOnSelection = (
     });
     // Set style of edges going from selected nodes
     selectedNodes.forEach(nodeIdentifier => {
-      const reactflowNode = reactflowInstance.getNode(nodeIdentifier);
+      const reactflowNode = getNode(nodeIdentifier);
       // Something is wrong, we are most-likely working with old, no longer valid values of selected nodes.
-      if(reactflowNode === undefined) {
+      if (reactflowNode === undefined) {
         return prevEdges;
       }
       const connectedEdges = getConnectedEdges([reactflowNode], prevEdges);
@@ -34,7 +34,7 @@ export const setHighlightingStylesBasedOnSelection = (
     // Set style of selected edges
     selectedEdges.forEach(selectedEdgeId => {
       const edge = prevEdges.find(prevEdge => prevEdge.id === selectedEdgeId);
-      if(edge === undefined) {
+      if (edge === undefined) {
         return;
       }
 
@@ -49,19 +49,20 @@ export const setHighlightingStylesBasedOnSelection = (
     // using ctrl-selection then when the user doesn't do anything else, the node is not highlighting
     // (after sure for example moves the viewport, it is highlighted again)
     setNodes(prevNodes => prevNodes.map(node => {
-      const isChangedBasedOnSelectedEdge = changedNodesBasedOnEdgeSelection.find(nodeId => nodeId === node.id) !== undefined;
+      const isChangedBasedOnSelectedEdge =
+        changedNodesBasedOnEdgeSelection.find(nodeId => nodeId === node.id) !== undefined;
       const isHighlighted = selectedNodes.find(id => node.id === id) !== undefined;
 
       let newOutline: string | undefined = undefined;
-      if(isHighlighted) {
+      if (isHighlighted) {
         newOutline = `0.25em solid ${highlightColor}`;
       }
-      else if(isChangedBasedOnSelectedEdge) {
+      else if (isChangedBasedOnSelectedEdge) {
         newOutline = `0.25em solid ${nextToHighlightedElementColor}`;
       }
       // Else undefined
 
-      if(newOutline === node.style?.outline) {
+      if (newOutline === node.style?.outline) {
         return node;
       }
       return {
@@ -74,7 +75,8 @@ export const setHighlightingStylesBasedOnSelection = (
     }));
 
     return prevEdges.map(edge => {
-      return changedCopiesOfPreviousEdges[edge.id].style?.stroke === edge.style?.stroke ? edge : changedCopiesOfPreviousEdges[edge.id];
+      return changedCopiesOfPreviousEdges[edge.id].style?.stroke === edge.style?.stroke
+        ? edge : changedCopiesOfPreviousEdges[edge.id];
     });
   });
 };
@@ -89,15 +91,16 @@ export const highlightColorMap: Record<HighlightLevel, string> = {
 };
 
 function storeEdgeCopyToGivenMap(
-  edge: Edge<any>, newEdgeColor: string | null,
+  edge: Edge<any>,
+  newEdgeColor: string | null,
   changedCopiesOfPreviousEdges: Record<string, Edge<any>>
 ): void {
-  if(newEdgeColor === null) {
+  if (newEdgeColor === null) {
     newEdgeColor = edge?.data?.color;
   }
 
-  const changedEdge = changedCopiesOfPreviousEdges[edge.id] ?? ({...edge});
-  changedEdge.style = {...changedEdge.style, stroke: newEdgeColor ?? undefined};
+  const changedEdge = changedCopiesOfPreviousEdges[edge.id] ?? ({ ...edge });
+  changedEdge.style = { ...changedEdge.style, stroke: newEdgeColor ?? undefined };
   changedEdge.markerEnd = selectMarkerEnd(changedEdge.data, newEdgeColor);
   changedCopiesOfPreviousEdges[changedEdge.id] = changedEdge;
 }

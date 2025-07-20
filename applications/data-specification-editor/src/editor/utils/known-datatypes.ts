@@ -50,6 +50,14 @@ export const knownDatatypes: KnownDatatype[] = [
         }
     },
     {
+        "iri": "http://www.w3.org/2001/XMLSchema#dateTimeStamp",
+        "documentation": "https://ofn.gov.cz/základní-datové-typy/2020-07-01/#datum-a-čas",
+        "label": {
+            "cs": "Časové razítko",
+            "en": "Timestamp"
+        }
+    },
+    {
         "iri": "http://www.w3.org/2001/XMLSchema#gYear",
         "documentation": "http://www.w3.org/2001/XMLSchema#gYear",
         "label": {
@@ -138,6 +146,30 @@ export const knownDatatypes: KnownDatatype[] = [
         "label": {
             "cs": "Hex kódovaný binární obsah",
             "en": "Hex encoded binary content"
+        }
+    },
+    {
+        "iri": "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "documentation": "http://www.opengis.net/ont/geosparql#wktLiteral",
+        "label": {
+            "cs": "WKT - Well-Known Text",
+            "en": "WKT - Well-Known Text"
+        }
+    },
+        {
+        "iri": "http://www.opengis.net/ont/geosparql#gmlLiteral",
+        "documentation": "http://www.opengis.net/ont/geosparql#gmlLiteral",
+        "label": {
+            "cs": "GML - Geography Markup Language",
+            "en": "GML - Geography Markup Language"
+        }
+    },
+    {
+        "iri": "http://www.opengis.net/ont/geosparql#geoJSONLiteral",
+        "documentation": "http://www.opengis.net/ont/geosparql#geoJSONLiteral",
+        "label": {
+            "cs": "GeoJSON",
+            "en": "GeoJSON"
         }
     },
 ];

@@ -1,19 +1,25 @@
 import { useMemo } from "react";
-import { generate } from "@dataspecer/core-v2/semantic-model/lightweight-owl";
+import { generateLightweightOwl } from "@dataspecer/lightweight-owl";
 import type { SemanticModelEntity } from "@dataspecer/core-v2/semantic-model/concepts";
 import { BackendPackageService } from "@dataspecer/core-v2/project";
 import { httpFetch } from "@dataspecer/core/io/fetch/fetch-browser";
-import type { EntityModel } from "@dataspecer/core-v2/entity-model";
+import { type Entities, type Entity, type EntityModel } from "@dataspecer/core-v2/entity-model";
 import type { VisualModel, WritableVisualModel } from "@dataspecer/core-v2/visual-model";
-import { type ExportedConfigurationType, modelsToWorkspaceString, useLocalStorage } from "../features/export/export-utils";
+import {
+  type ExportedConfigurationType,
+  modelsToWorkspaceString,
+  useLocalStorage,
+} from "../features/export/export-utils";
 import { useModelGraphContext } from "../context/model-context";
 import { useDownload } from "../features/export/download";
 import { useClassesContext } from "../context/classes-context";
 import { entityWithOverriddenIri, getIri, getModelIri } from "../util/iri-utils";
 import { ExportButton } from "../components/management/buttons/export-button";
 import { useQueryParamsContext } from "../context/query-params-context";
-import * as DataSpecificationVocabulary from "@dataspecer/core-v2/semantic-model/data-specification-vocabulary";
+import * as DataSpecificationVocabulary from "@dataspecer/data-specification-vocabulary";
 import { isInMemorySemanticModel } from "../utilities/model";
+import { createShaclForProfile, shaclToRdf, createSemicShaclStylePolicy } from "@dataspecer/shacl-v2";
+import { InMemorySemanticModel } from "@dataspecer/core-v2/semantic-model/in-memory";
 
 export const ExportManagement = () => {
   const { aggregator, aggregatorView, models, visualModels, setAggregatorView, replaceModels } =
@@ -87,7 +93,7 @@ export const ExportManagement = () => {
       baseIri: "",
       iri: "",
     };
-    generate(entities, context)
+    generateLightweightOwl(entities, context)
       .then((generatedLightweightOwl) => {
         const date = Date.now();
         download(generatedLightweightOwl, `dscme-lw-ontology-${date}.ttl`, "text/plain");
@@ -154,6 +160,30 @@ export const ExportManagement = () => {
       .catch(console.error);
   };
 
+  const handleGenerateProfileShacl = () => {
+    const semanticModels = [...models.values()];
+    const profileModels = [...models.values()];
+    const topProfileModel = profileModels[0];
+
+    const iri = isInMemorySemanticModel(topProfileModel) ?
+      topProfileModel.getBaseIri() : topProfileModel.getId();
+
+    console.log({ semanticModels, profileModels, topProfileModel });
+
+    const shacl = createShaclForProfile(
+      semanticModels.map(model => new SemanticModelWrap(model)),
+      profileModels, topProfileModel,
+      createSemicShaclStylePolicy(iri));
+
+    shaclToRdf(shacl, {
+      prettyPrint: true,
+    }).then(shaclAsRdf => {
+      console.log(shaclAsRdf);
+      const date = Date.now();
+      download(shaclAsRdf, `shacl-profile-${date}.ttl`, "text/plain");
+    });
+  };
+
   return (
     <div className="my-auto mr-2 flex flex-row">
       <ExportButton title="Open workspace from configuration file" onClick={handleLoadWorkspaceFromJson}>
@@ -168,6 +198,52 @@ export const ExportManagement = () => {
       <ExportButton title="Generate DSV (application profile)" onClick={handleGenerateDataSpecificationVocabulary}>
         💾dsv
       </ExportButton>
+      <ExportButton title="Generate SHACL for profile" onClick={handleGenerateProfileShacl}>
+        💾shacl
+      </ExportButton>
     </div>
   );
 };
+
+class SemanticModelWrap implements EntityModel {
+
+  readonly baseIri: string;
+
+  readonly model: EntityModel;
+
+  constructor(model: EntityModel) {
+    if (model instanceof InMemorySemanticModel) {
+      this.baseIri = model.getBaseIri();
+    } else {
+      this.baseIri = "";
+    }
+    this.model = model;
+  }
+
+  getEntities(): Entities {
+    return this.model.getEntities();
+  }
+
+  subscribeToChanges(
+    callback: (updated: Record<string, Entity>, removed: string[]) => void,
+  ): () => void {
+    return this.model.subscribeToChanges(callback);
+  }
+
+  getId(): string {
+    return this.model.getId();
+  }
+
+  getAlias(): string | null {
+    return this.model.getAlias();
+  }
+
+  setAlias(alias: string | null): void {
+    return this.model.setAlias(alias);
+  }
+
+  getBaseIri(): string {
+    return this.baseIri;
+  }
+
+}

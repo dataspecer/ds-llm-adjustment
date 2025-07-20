@@ -4,8 +4,12 @@ import { addVisualNodeProfile } from "./operation/add-visual-node-profile";
 import { addVisualNode } from "./operation/add-visual-node";
 import { deleteEntityModel } from "./operation/delete-entity-model";
 import { updateVisualNodeProfiles } from "./operation/update-visual-node-profiles";
-import { addVisualRelationships, addVisualRelationshipsWithSpecifiedVisualEnds } from "./operation/add-visual-relationships";
+import {
+  addVisualRelationshipsForRepresented,
+  addVisualRelationshipsWithSpecifiedVisualEnds,
+} from "./operation/add-visual-relationships";
 import { CmeReference } from "../cme-model/model";
+import { deleteVisualEntity } from "./operation/delete-visual-entity";
 
 export interface VisualModelOperationExecutor {
 
@@ -71,7 +75,6 @@ export interface VisualModelOperationExecutor {
   ): void;
 
   /**
-    @param represented The profiled entity.
    * @throws DataspecerError
    */
   updateProfile(
@@ -79,6 +82,13 @@ export interface VisualModelOperationExecutor {
     previous: CmeReference[],
     next: CmeReference[],
   ): void;
+
+  /**
+   * Delete all visual entities representing given reference.
+   *
+   * @throws DataspecerError
+   */
+  deleteEntity(represented: CmeReference): void;
 
   /**
    * @throws DataspecerError
@@ -101,7 +111,7 @@ implements VisualModelOperationExecutor {
     child: EntityDsIdentifier,
     parent: EntityDsIdentifier,
   ): void {
-    addVisualRelationships(this.visualModel,
+    addVisualRelationshipsForRepresented(this.visualModel,
       represented.model, represented.identifier, child, parent);
   }
 
@@ -159,7 +169,7 @@ implements VisualModelOperationExecutor {
     source: EntityDsIdentifier,
     target: EntityDsIdentifier,
   ): void {
-    addVisualRelationships(this.visualModel,
+    addVisualRelationshipsForRepresented(this.visualModel,
       represented.model, represented.identifier, source, target);
   }
 
@@ -169,6 +179,10 @@ implements VisualModelOperationExecutor {
     next: CmeReference[],
   ): void {
     updateVisualNodeProfiles(this.visualModel, represented, previous, next);
+  }
+
+  deleteEntity(represented: CmeReference): void {
+    deleteVisualEntity(this.visualModel, represented);
   }
 
   deleteModel(model: ModelDsIdentifier): void {
@@ -189,6 +203,6 @@ function convertIdentifiersToVisualEntities(
 
 export function createVisualModelOperationExecutor(
   visualModel: WritableVisualModel,
-) {
+): VisualModelOperationExecutor {
   return new DefaultVisualModelOperationExecutor(visualModel);
 }

@@ -7,11 +7,6 @@ import {
   type SemanticModelRelationship,
   isSemanticModelClass,
 } from "@dataspecer/core-v2/semantic-model/concepts";
-import {
-  type SemanticModelClassUsage,
-  type SemanticModelRelationshipUsage,
-  isSemanticModelClassUsage,
-} from "@dataspecer/core-v2/semantic-model/usage/concepts";
 
 import { useEntityProxy } from "../../util/detail-utils";
 import { IriLink } from "../../components/iri-link";
@@ -24,10 +19,14 @@ import { MoveViewportToEntityButton } from "../components/center-viewport-on-ent
 import { useOptions } from "../../configuration/options";
 import { useActions } from "../../action/actions-react-binding";
 import { AddNeighborhoodButton } from "../components/add-neighborhood-button";
-import { useCatalogHighlightingController } from "../../diagram/features/highlighting/exploration/catalog/catalog-highlighting-controller";
-import "../../diagram/features/highlighting/exploration/catalog/highlighting-catalog-styles.css";
-import "../../diagram/features/highlighting/exploration/context/exploration-highlighting-styles.css";
-import { isSemanticModelRelationshipProfile, SemanticModelClassProfile, SemanticModelRelationshipProfile } from "@dataspecer/core-v2/semantic-model/profile/concepts";
+import { useCatalogHighlightingController } from "../exploration-highlighting/catalog-highlighting-controller";
+import "../exploration-highlighting/highlighting-catalog-styles.css";
+import "../../diagram/features/highlighting/exploration/shared-style/exploration-highlighting-styles.css"
+import {
+  isSemanticModelRelationshipProfile,
+  SemanticModelClassProfile,
+  SemanticModelRelationshipProfile,
+} from "@dataspecer/core-v2/semantic-model/profile/concepts";
 import { getFallbackDisplayName, getNameLanguageString } from "../../util/name-utils";
 import { getLocalizedStringFromLanguageString } from "../../util/language-utils";
 
@@ -40,28 +39,27 @@ const TreeLikeOffset = (props: { offset?: number }) => {
 };
 
 export const EntityRow = (props: {
-    model: string,
-    entity: SemanticModelClass | SemanticModelRelationship |
-     SemanticModelClassUsage | SemanticModelRelationshipUsage |
-     SemanticModelClassProfile | SemanticModelRelationshipProfile;
-    expandable: null | {
-        toggleHandler: () => void;
-        expanded: () => boolean;
-    };
-    drawable: null | {
-        addToViewHandler: () => void;
-        removeFromViewHandler: () => void;
-    };
-    removable: null | {
-        remove: () => void;
-    };
-    targetable: null | {
-        centerViewportOnEntityHandler: (entityNumberToBeCentered: number) => void;
-        isTargetable: boolean;
-    };
-    sourceModel?: EntityModel;
-    offset?: number;
-    isOnCanvas: boolean;
+  model: string,
+  entity: SemanticModelClass | SemanticModelRelationship |
+  SemanticModelClassProfile | SemanticModelRelationshipProfile;
+  expandable: null | {
+    toggleHandler: () => void;
+    expanded: () => boolean;
+  };
+  drawable: null | {
+    addToViewHandler: () => void;
+    removeFromViewHandler: () => void;
+  };
+  removable: null | {
+    remove: () => void;
+  };
+  targetable: null | {
+    centerViewportOnEntityHandler: (entityNumberToBeCentered: number) => void;
+    isTargetable: boolean;
+  };
+  sourceModel?: EntityModel;
+  offset?: number;
+  isOnCanvas: boolean;
 }) => {
   const { openDetailDialog, openModifyDialog, openCreateProfileDialog } = useActions();
 
@@ -71,7 +69,7 @@ export const EntityRow = (props: {
   const { name, iri, domain } = useEntityProxy(entity, language);
 
   const [isExpanded, setIsExpanded] = useState(expandable?.expanded());
-  const isDraggable = isSemanticModelClass(entity) || isSemanticModelClassUsage(entity);
+  const isDraggable = isSemanticModelClass(entity);
 
   const sourceModelIsLocal = sourceModel instanceof InMemorySemanticModel;
 
@@ -83,21 +81,21 @@ export const EntityRow = (props: {
   // unfortunately if we shrink the models above the current (in the catalog), we will start the flickering
   // (because the models shift up, which result in new classes (un)entering the cursor)
   const shouldShrinkThisRow = explorationHighlightingController.shouldShrinkCatalog &&
-                                !explorationHighlightingController.isEntityHighlighted(entity.id) &&
-                                explorationHighlightingController.isAnyEntityHighlighted;
+    !explorationHighlightingController.isEntityHighlighted(entity.id) &&
+    explorationHighlightingController.isAnyEntityHighlighted;
 
   let effectiveName = name;
   const isRelationshipProfile = isSemanticModelRelationshipProfile(entity);
   if (isRelationshipProfile) {
     const domainName = getLocalizedStringFromLanguageString(
       getNameLanguageString(domain.entity ?? null), language) ??
-        getFallbackDisplayName(domain.entity ?? null);
+      getFallbackDisplayName(domain.entity ?? null);
 
     effectiveName = `[${domainName}] ->  ${name}`;
   }
 
   const onMouseEnter = (_: React.MouseEvent<HTMLDivElement, MouseEvent>) => {
-    if(explorationHighlightingController.isHighlightingChangeAllowed()) {
+    if (explorationHighlightingController.isHighlightingChangeAllowed()) {
       actions.highlightNodeInExplorationModeFromCatalog(entity.id, props.model);
     }
   };
@@ -108,8 +106,8 @@ export const EntityRow = (props: {
       draggable={isDraggable}
       onMouseEnter={onMouseEnter}
       onMouseLeave={(_) => explorationHighlightingController.resetHighlight()}
-      // TODO Fix to use editor API.
-      // onDragStart={(e) => onDragStart(e as unknown as DragEvent, props.model, entity.id, "classNode")}
+    // TODO Fix to use editor API.
+    // onDragStart={(e) => onDragStart(e as unknown as DragEvent, props.model, entity.id, "classNode")}
     >
       <span className="overflow-x-clip" title={iri ?? ""}>
         <IriLink iri={iri} />
@@ -132,7 +130,7 @@ export const EntityRow = (props: {
         {removable && <RemoveButton onClickHandler={removable.remove} />}
         {sourceModelIsLocal && (
           <button className="hover:bg-teal-400" title="Modify" onClick={() => openModifyDialog(entity.id)}>
-                        ✏
+            ✏
           </button>
         )}
         <OpenDetailButton onClick={() => openDetailDialog(entity.id)} />

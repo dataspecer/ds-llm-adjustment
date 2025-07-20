@@ -1,5 +1,7 @@
 import { DialogProps } from "@/dialog/dialog-api";
-import { EditVisualDiagramNodeDialogState } from "../edit-visual-diagram-node/edit-visual-diagram-node-dialog-controller";
+import {
+  EditVisualDiagramNodeDialogState,
+} from "../edit-visual-diagram-node/edit-visual-diagram-node-dialog-controller";
 import { getLocalizedStringFromLanguageString } from "@/util/language-utils";
 import { useState } from "react";
 import { t } from "@/application";
@@ -14,7 +16,7 @@ export const VisualDiagramNodeInfoDialog = (props: DialogProps<EditVisualDiagram
       <div className="bg-slate-100">
         <div className="flex">
           <div className="ml-auto mr-8">
-                      Language:&nbsp;
+            Language:&nbsp;
             <select
               name="langs"
               id="langs"
@@ -32,7 +34,7 @@ export const VisualDiagramNodeInfoDialog = (props: DialogProps<EditVisualDiagram
         </div>
       </div>
       <div className="grid gap-y-3 bg-slate-100 md:grid-cols-[20%_80%] md:pl-8">
-        <DialogDetailRow detailKey={t("visual-diagram-node-info-dialog.representedVisualModelName")}>
+        <DialogDetailRow detailKey={t("visual-diagram-node-info-dialog.represented-visual-model-name")}>
           {getLocalizedStringFromLanguageString(state.representedVisualModelName, language)}
         </DialogDetailRow>
       </div>

@@ -5,7 +5,7 @@ import { Position } from "../diagram-model";
 import "./canvas-menu-general.css";
 import { JSX } from "react";
 
-export type CanvasMenuContentType = ({menuProps}: {menuProps: CanvasMenuContentProps}) => JSX.Element | null;
+export type CanvasMenuContentType = ({ menuProps }: {menuProps: CanvasMenuContentProps}) => JSX.Element | null;
 
 /**
  * Represents the general toolbar for canvas. General toolbar is component, which gets
@@ -15,8 +15,6 @@ export interface CanvasGeneralMenuProps {
   menuContent: CanvasMenuContentType;
 }
 
-// TODO RadStr: Actually if we played with the typing a bit this could probably be probably also used for edges
-//              This meaning this whole general canvnas toolbar component, but that is for future, when more stuff gets added.
 /**
  * Stores the props for the content of general toolbar
  */

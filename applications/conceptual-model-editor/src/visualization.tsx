@@ -9,18 +9,14 @@ import {
   isSemanticModelRelationship,
 } from "@dataspecer/core-v2/semantic-model/concepts";
 import {
-  type SemanticModelClassUsage,
-  type SemanticModelRelationshipUsage,
-  isSemanticModelClassUsage,
-  isSemanticModelRelationshipUsage,
-} from "@dataspecer/core-v2/semantic-model/usage/concepts";
-import {
+  VisualDiagramNode,
   type VisualEntity,
   VisualGroup,
   type VisualModel,
   type VisualNode,
   type VisualProfileRelationship,
   type VisualRelationship,
+  isVisualDiagramNode,
   isVisualGroup,
   isVisualNode,
   isVisualProfileRelationship,
@@ -28,33 +24,65 @@ import {
   isWritableVisualModel,
 } from "@dataspecer/core-v2/visual-model";
 import {
+  AggregatedEntityWrapper,
   type SemanticModelAggregatorView,
 } from "@dataspecer/core-v2/semantic-model/aggregator";
+import {
+  isSemanticModelClassProfile,
+  isSemanticModelRelationshipProfile,
+  type SemanticModelClassProfile,
+  type SemanticModelRelationshipProfile,
+} from "@dataspecer/core-v2/semantic-model/profile/concepts";
 
 import { type UseModelGraphContextType, useModelGraphContext } from "./context/model-context";
 import { type UseClassesContextType, useClassesContext } from "./context/classes-context";
 import { cardinalityToHumanLabel, getDomainAndRange } from "./util/relationship-utils";
 import { useActions } from "./action/actions-react-binding";
-import { Diagram, type Edge, EdgeType, Group, type NodeItem, type Node, NodeType, NODE_ITEM_TYPE, NodeRelationshipItem } from "./diagram/";
+import {
+  DiagramOptions,
+  EntityColor,
+  LabelVisual,
+  ProfileOfVisual,
+} from "./diagram/model";
+import {
+  Diagram, type Edge, EdgeType, Group, type NodeItem, type Node, NodeType,
+  NODE_ITEM_TYPE, NodeRelationshipItem, NodeTitleItem, NODE_TITLE_ITEM_TYPE,
+  VisualModelDiagramNode, DiagramNodeTypes,
+} from "./diagram/";
 import { type UseDiagramType } from "./diagram/diagram-hook";
 import { configuration, createLogger } from "./application";
-import { getDescriptionLanguageString, getUsageNoteLanguageString } from "./util/name-utils";
+import { getDescriptionLanguageString } from "./util/name-utils";
 import { getLocalizedStringFromLanguageString } from "./util/language-utils";
-import { getIri, getModelIri } from "./util/iri-utils";
+import { isIriAbsolute } from "./util/iri-utils";
 import { findSourceModelOfEntity } from "./service/model-service";
-import { type EntityModel } from "@dataspecer/core-v2";
-import { Options, useOptions } from "./configuration/options";
+import { Entity, type EntityModel } from "@dataspecer/core-v2";
+import { useOptions } from "./configuration/options";
 import { getGroupMappings } from "./action/utilities";
-import { synchronizeOnAggregatorChange, updateVisualAttributesBasedOnSemanticChanges } from "./dataspecer/visual-model/aggregator-to-visual-model-adapter";
-import { isSemanticModelClassProfile, isSemanticModelRelationshipProfile, SemanticModelClassProfile, SemanticModelRelationshipProfile } from "@dataspecer/core-v2/semantic-model/profile/concepts";
+import {
+  synchronizeOnAggregatorChange,
+  updateVisualAttributesBasedOnSemanticChanges,
+} from "./dataspecer/visual-model/aggregator-to-visual-model-adapter";
 import { EntityDsIdentifier } from "./dataspecer/entity-model";
-import { createAttributeProfileLabel, getEntityLabelToShowInDiagram } from "./util/utils";
+import { getEntityLabelToShowInDiagram } from "./util/utils";
+import { SemanticModel } from "./dataspecer/semantic-model";
+import { CmeRelationshipProfileMandatoryLevel } from "./dataspecer/cme-model";
+import { asMandatoryLevel, selectDomainAndRange } from "./dataspecer/cme-model/adapter/adapter-utilities";
 
 import "./visualization.css";
+import { isInMemorySemanticModel } from "./utilities/model";
+import { validateVisualModel } from "./visualization-validation";
 
 const LOG = createLogger(import.meta.url);
 
 const DEFAULT_MODEL_COLOR = configuration().defaultModelColor;
+
+type ExtendedOptions = {
+  language: string
+} & DiagramOptions;
+
+type SemanticModelMap = Map<string, EntityModel>;
+
+type SemanticEntityRecord = Record<string, AggregatedEntityWrapper>;
 
 export const Visualization = () => {
   const options = useOptions();
@@ -65,21 +93,16 @@ export const Visualization = () => {
   const aggregatorView = graph.aggregatorView;
   const activeVisualModel = useMemo(() => aggregatorView.getActiveVisualModel(), [aggregatorView]);
 
-  // Register a callback with aggregator for visualization
-  // - remove what has been removed from the visualization state
-  // - update entities that have been updated
-  //   - rerender updated classes
-  //   - if they have updated attributes, update them as well
-  //   - collect updated relationships and relationship profiles - rerender them after classes are on the canvas
-  // the callback is registered for twice
-  // - first time for the semantic information about the models
-  //   - new relationship between two classes
-  //   - new attribute for a class
-  //   - rename of a concept
-  // - second time for the visual information from the active visual model
-  //   - change of visibility, position
-  useEffect(() => {
+  const extendedOptions: ExtendedOptions = {
+    language: options.language,
+    entityMainColor: EntityColor.Entity,
+    labelVisual: LabelVisual.Entity,
+    profileOfVisual: ProfileOfVisual.Entity,
+    displayRangeDetail: true,
+    displayRelationshipProfileArchetype: false,
+  };
 
+  useEffect(() => {
     const previousEntities = aggregatorView.getEntities();
     const unsubscribeSemanticAggregatorCallback = aggregatorView.subscribeToChanges((updated, removed) => {
       console.log("[VISUALIZATION] SemanticModelAggregatorView.subscribeToChanges", { updated, removed });
@@ -89,7 +112,7 @@ export const Visualization = () => {
       }
     });
 
-    const unsubscribeCanvasCallback = aggregatorView.getActiveVisualModel()?.subscribeToChanges({
+    const unsubscribeCanvasCallback = activeVisualModel?.subscribeToChanges({
       modelColorDidChange(model) {
         if (activeVisualModel === null) {
           return;
@@ -97,9 +120,7 @@ export const Visualization = () => {
         // We ignore model color changes here for now.
         console.log("[VISUALIZATION] VisualModel.subscribeToChanges.modelColorDidChange", { model });
         propagateVisualModelColorChangesToVisualization(
-          options, activeVisualModel, actions.diagram, aggregatorView, classesContext, graph,
-          model
-        );
+          extendedOptions, activeVisualModel, actions.diagram, aggregatorView, graph, model);
       },
       visualEntitiesDidChange(changes) {
         if (activeVisualModel === null) {
@@ -107,23 +128,24 @@ export const Visualization = () => {
         }
         console.log("[VISUALIZATION] VisualModel.subscribeToChanges.visualEntitiesDidChange", { changes });
         onChangeVisualEntities(
-          options, activeVisualModel, actions.diagram, aggregatorView, classesContext, graph,
-          changes,
-        );
+          extendedOptions, activeVisualModel, actions.diagram, aggregatorView, graph, changes);
       },
     });
 
     return () => {
-      unsubscribeSemanticAggregatorCallback?.();
+      unsubscribeSemanticAggregatorCallback();
       unsubscribeCanvasCallback?.();
     };
 
-  }, [options, activeVisualModel, actions, aggregatorView, classesContext, graph]);
+  }, [options, activeVisualModel, actions, aggregatorView, graph]);
 
   // Update canvas content on view change.
   useEffect(() => {
     console.log("[VISUALIZATION] Something has changed, recreating diagram visual.", activeVisualModel);
-    onChangeVisualModel(options, activeVisualModel, actions.diagram, aggregatorView, classesContext, graph);
+    validateVisualModel(actions, activeVisualModel, aggregatorView, classesContext, graph.models);
+    onChangeVisualModel(
+      extendedOptions, activeVisualModel, actions.diagram, aggregatorView,
+      classesContext, graph);
   }, [options, activeVisualModel, actions, aggregatorView, classesContext, graph]);
 
   return (
@@ -136,11 +158,10 @@ export const Visualization = () => {
 };
 
 function propagateVisualModelColorChangesToVisualization(
-  options: Options,
+  options: ExtendedOptions,
   visualModel: VisualModel | null,
   diagram: UseDiagramType | null,
   aggregatorView: SemanticModelAggregatorView,
-  classesContext: UseClassesContextType,
   graphContext: UseModelGraphContextType,
   changedModelIdentifier: string,
 ) {
@@ -178,22 +199,20 @@ function propagateVisualModelColorChangesToVisualization(
 
   // Call the change method.
   onChangeVisualEntities(
-    options, visualModel, diagram, aggregatorView, classesContext,
+    options, visualModel, diagram, aggregatorView,
     graphContext, changes)
 }
 
 /**
  * Set content of nodes and edges from the visual model.
  * Effectively erase any previous content.
- *
- * TODO We call setContent which is async, we should return a promise and wait.
  */
 function onChangeVisualModel(
-  options: Options,
+  options: ExtendedOptions,
   visualModel: VisualModel | null,
   diagram: UseDiagramType | null,
   aggregatorView: SemanticModelAggregatorView,
-  classesContext: UseClassesContextType,
+  _classesContext: UseClassesContextType,
   graphContext: UseModelGraphContextType,
 ) {
   if (diagram === null || !diagram.areActionsReady) {
@@ -208,19 +227,8 @@ function onChangeVisualModel(
 
   const models = graphContext.models;
   const entities = aggregatorView.getEntities();
-  const relationships = classesContext.relationships;
-  const relationshipsUsages = classesContext.usages.filter(isSemanticModelRelationshipUsage);
-  const relationshipsProfiles = classesContext.relationshipProfiles;
 
-  const profilingSources = [
-    ...classesContext.classes,
-    ...classesContext.relationships,
-    ...classesContext.usages,
-    ...classesContext.classProfiles,
-    ...classesContext.relationshipProfiles,
-  ];
-
-  const nextNodes: Node[] = [];
+  const nextNodes: DiagramNodeTypes[] = [];
   const nextEdges: Edge[] = [];
   const nextGroups: VisualGroup[] = [];
 
@@ -228,30 +236,32 @@ function onChangeVisualModel(
   const { nodeToGroupMapping } = getGroupMappings(visualModel);
 
   for (const visualEntity of visualEntities) {
-    if (isVisualGroup(visualEntity)) {
+    if (isVisualDiagramNode(visualEntity)) {
+      const node = createVisualModelDiagramNode(
+        options, aggregatorView.getAvailableVisualModels(),
+        visualEntity, nodeToGroupMapping[visualEntity.identifier] ?? null);
+      nextNodes.push(node);
+    } else if (isVisualGroup(visualEntity)) {
       nextGroups.push(visualEntity);
       continue;
     } else if (isVisualNode(visualEntity)) {
       const entity = entities[visualEntity.representedEntity]?.aggregatedEntity ?? null;
-      if (isSemanticModelClassUsage(entity) || isSemanticModelClass(entity)
-        || isSemanticModelClassProfile(entity)) {
+      if (isSemanticModelClass(entity) || isSemanticModelClassProfile(entity)) {
         const model = findSourceModelOfEntity(entity.id, models);
         if (model === null) {
           console.error("Ignored entity for missing model.", { entity });
           continue;
         }
-
         const node = createDiagramNode(
-          options, visualModel,
-          relationships, relationshipsUsages, relationshipsProfiles, profilingSources,
-          visualEntity, entity, model, nodeToGroupMapping[visualEntity.identifier] ?? null);
+          options, visualModel, models, entities,
+          visualEntity, entity, model,
+          nodeToGroupMapping[visualEntity.identifier] ?? null);
         nextNodes.push(node);
       }
     } else if (isVisualRelationship(visualEntity)) {
       const entity = entities[visualEntity.representedRelationship]?.aggregatedEntity ?? null;
       const isRelationship =
         isSemanticModelRelationship(entity) ||
-        isSemanticModelRelationshipUsage(entity) ||
         isSemanticModelRelationshipProfile(entity) ||
         isSemanticModelGeneralization(entity);
       if (isRelationship) {
@@ -261,7 +271,8 @@ function onChangeVisualModel(
           continue;
         }
         const edge = createDiagramEdge(
-          options, visualModel, profilingSources, visualEntity, entity);
+          options, visualModel, models, entities,
+          visualEntity, entity, model);
         if (edge !== null) {
           nextEdges.push(edge);
         }
@@ -278,9 +289,7 @@ function onChangeVisualModel(
         continue;
       }
       const profiled: EntityDsIdentifier[] = [];
-      if (isSemanticModelClassUsage(entity)) {
-        profiled.push(entity.usageOf);
-      } else if (isSemanticModelClassProfile(entity)) {
+      if (isSemanticModelClassProfile(entity)) {
         profiled.push(...entity.profiling);
       } else {
         console.error("Ignored profile relation as entity is not a usage or a profile.", { entity });
@@ -296,7 +305,8 @@ function onChangeVisualModel(
             // The VisualProfileRelationship represents different profile relationship.
             continue;
           }
-          const edge = createDiagramEdgeForClassUsageOrProfile(visualModel, visualEntity, entity);
+          const edge = createDiagramEdgeForClassUsageOrProfile(
+            options, visualModel, visualEntity, entity);
           if (edge !== null) {
             nextEdges.push(edge);
           }
@@ -306,297 +316,477 @@ function onChangeVisualModel(
     // For now we ignore all other.
   }
 
-  const groupsToSetContentWith = nextGroups.map(visualGroup => {
-    return {
-      group: createGroupNode(visualGroup),
-      content: visualGroup.content,
-    };
-  });
+  const groupsToSetContentWith = nextGroups.map(visualGroup => ({
+    group: createGroupNode(visualGroup),
+    content: visualGroup.content,
+  }));
+
+  // We do not wait for the promise.
   void diagram.actions().setContent(nextNodes, nextEdges, groupsToSetContentWith);
 }
 
-function createGroupNode(
-  visualGroup: VisualGroup,
-): Group {
-  return {
-    identifier: visualGroup.identifier,
+function createVisualModelDiagramNode(
+  options: ExtendedOptions,
+  availableVisualModels: VisualModel[],
+  visualDiagramNode: VisualDiagramNode,
+  group: string | null,
+): VisualModelDiagramNode {
+  const referencedVisualModel = availableVisualModels.find(
+    model => model.getIdentifier() === visualDiagramNode.representedVisualModel);
+  let referencedVisualModelLabel = referencedVisualModel === undefined ?
+    "" :
+    getLocalizedStringFromLanguageString(referencedVisualModel.getLabel(), options.language);
+  if (referencedVisualModelLabel === null) {
+    referencedVisualModelLabel = "Visual model node";
+  }
+
+  const result: VisualModelDiagramNode = {
+    identifier: visualDiagramNode.identifier,
+    externalIdentifier: visualDiagramNode.representedVisualModel,
+    representedModelAlias: referencedVisualModelLabel,
+    label: referencedVisualModelLabel,
+    group,
+    position: {
+      x: visualDiagramNode.position.x,
+      y: visualDiagramNode.position.y,
+      anchored: visualDiagramNode.position.anchored
+    },
   };
+
+  return result;
 }
 
 function createDiagramNode(
-  options: Options,
+  options: ExtendedOptions,
   visualModel: VisualModel,
-  relationships: SemanticModelRelationship[],
-  relationshipsUsages: SemanticModelRelationshipUsage[],
-  relationshipsProfiles: SemanticModelRelationshipProfile[],
-  profilingSources: (
-    | SemanticModelClass | SemanticModelRelationship
-    | SemanticModelClassUsage | SemanticModelRelationshipUsage
-    | SemanticModelClassProfile | SemanticModelRelationshipProfile)[],
+  semanticModels: SemanticModelMap,
+  entities: SemanticEntityRecord,
   visualNode: VisualNode,
-  entity: SemanticModelClass | SemanticModelClassUsage | SemanticModelClassProfile,
-  model: EntityModel,
+  entity: SemanticModelClass | SemanticModelClassProfile,
+  _semanticModel: EntityModel,
   group: string | null,
 ): Node {
-  const language = options.language;
 
-  // Here we are missing proper implementation of content.
-  // See https://github.com/mff-uk/dataspecer/issues/928
-
-  const itemCandidates: Record<string, NodeItem> = {};
-
-  for (const attribute of relationships) {
-    if (!visualNode.content.includes(attribute.id)) {
-      continue;
-    }
-
-    itemCandidates[attribute.id] = {
-      type: NODE_ITEM_TYPE,
-      identifier: attribute.id,
-      label: getEntityLabelToShowInDiagram(language, attribute),
-      profileOf: null,
-    } as NodeRelationshipItem;
-  }
-
-  for (const attributeUsage of relationshipsUsages) {
-    if (!visualNode.content.includes(attributeUsage.id)) {
-      continue;
-    }
-
-    const profileOf = profilingSources.find(
-      (item) => item.id === attributeUsage.usageOf);
-    itemCandidates[attributeUsage.id] = {
-      type: NODE_ITEM_TYPE,
-      identifier: attributeUsage.id,
-      label: createAttributeProfileLabel(language, attributeUsage),
-      profileOf: {
-        label: profileOf === undefined ? "" : getEntityLabelToShowInDiagram(language, profileOf),
-        usageNote: getUsageNote(language, attributeUsage),
-      },
-    } as NodeRelationshipItem;
-  }
-
-  for (const attributeProfile of relationshipsProfiles) {
-    if (!visualNode.content.includes(attributeProfile.id)) {
-      continue;
-    }
-
-    const profileOf = profilingSources.filter(
-      item => attributeProfile.ends.find(end => end.profiling.includes(item.id)) !== undefined);
-    itemCandidates[attributeProfile.id] = {
-      type: NODE_ITEM_TYPE,
-      identifier: attributeProfile.id,
-      label: createAttributeProfileLabel(language, attributeProfile),
-      profileOf: {
-        label: profileOf.map(item => getEntityLabelToShowInDiagram(language, item)).join(", "),
-        usageNote: profileOf.map(item => getUsageNote(language, item)).join(", "),
-      },
-    } as NodeRelationshipItem;
-  }
-
-  // We use map to force ordering of items based on content.
-  //
-  // Be aware that the update of the semantic attributes comes later,
-  // so there is moment when the content of visual node is set,
-  // but the corresponding attributes semantic model in are not.
-  // That is why we need to filter the result.
-  const items: NodeItem[] = visualNode.content
-    .map(id => itemCandidates[id])
-    .filter(item => item !== undefined);
-
-  const isProfile = isSemanticModelClassUsage(entity)
-    || isSemanticModelClassProfile(entity);
-
-  let profileOf: (
-    | SemanticModelClass | SemanticModelRelationship
-    | SemanticModelClassUsage | SemanticModelRelationshipUsage
-    | SemanticModelClassProfile | SemanticModelRelationshipProfile)[] = [];
-
-  if (isSemanticModelClassUsage(entity)) {
-    const profile = profilingSources.find(item => item.id === entity.usageOf);
-    if (profile !== undefined) {
-      profileOf.push(profile);
-    }
-  } else if (isSemanticModelClassProfile(entity)) {
-    profileOf = profilingSources.filter(item => entity.profiling.includes(item.id));
-  }
+  const isProfile = isSemanticModelClassProfile(entity);
 
   return {
+    options,
     type: isProfile ? NodeType.ClassProfile : NodeType.Class,
     identifier: visualNode.identifier,
     externalIdentifier: entity.id,
-    label: getEntityLabelToShowInDiagram(language, entity),
-    iri: getIri(entity, getModelIri(model)),
+    label: getEntityLabelToShowInDiagram(options.language, entity),
+    iri: prepareIri(semanticModels, null, entity),
     color: visualModel.getModelColor(visualNode.model) ?? DEFAULT_MODEL_COLOR,
-    description: getEntityDescription(language, entity),
+    description: getEntityDescription(options.language, entity),
     group,
     position: {
       ...visualNode.position
     },
-    profileOf: !isProfile ? null : {
-      label: profileOf.map(item => getEntityLabelToShowInDiagram(language, item)).join(", "),
-      usageNote: getUsageNote(language, entity),
-    },
-    items,
+    profileOf: prepareProfileOf(
+      options, semanticModels, entities, entity),
+    items: prepareItems(
+      options, visualModel, semanticModels, entities, visualNode),
+    vocabulary: prepareVocabulary(
+      options, visualModel, semanticModels, entities, entity.id),
   };
 }
 
-function getEntityDescription(
-  language: string,
-  entity: SemanticModelClass | SemanticModelRelationship |
-    SemanticModelClassUsage | SemanticModelRelationshipUsage |
-    SemanticModelClassProfile | SemanticModelRelationshipProfile) {
-  return getLocalizedStringFromLanguageString(getDescriptionLanguageString(entity), language);
+function prepareItems(
+  options: ExtendedOptions,
+  visualModel: VisualModel,
+  semanticModels: SemanticModelMap,
+  entities: SemanticEntityRecord,
+  visualNode: VisualNode,
+): NodeItem[] {
+  // Be aware that the update of the semantic attributes comes later,
+  // so there is moment when the content of visual node is set,
+  // but the corresponding attributes semantic model in are not.
+  // That is why we need to filter the result.
+  const result: NodeItem[] = []
+  let lastLevel: CmeRelationshipProfileMandatoryLevel | null = null;
+  for (const identifier of visualNode.content) {
+    const entity = entities[identifier]?.aggregatedEntity ?? null;
+    let nextLevel: CmeRelationshipProfileMandatoryLevel | null = null;
+    let nextItem: NodeItem | null = null;
+    if (isSemanticModelRelationship(entity)) {
+      const [domain, range] = selectDomainAndRange(entity.ends);
+      const rangeEntity = entities[range.concept ?? ""]?.aggregatedEntity ?? null;
+      if (rangeEntity === null) {
+        LOG.warn("Missing range.", entity);
+      }
+      nextLevel = null;
+      nextItem = {
+        options,
+        type: NODE_ITEM_TYPE,
+        identifier: entity.id,
+        label: getEntityLabelToShowInDiagram(options.language, entity),
+        iri: prepareIri(semanticModels, null, entity),
+        profileOf: [],
+        vocabulary: prepareVocabulary(
+          options, visualModel, semanticModels, entities, entity.id),
+        cardinalitySource: cardinalityToHumanLabel(domain.cardinality),
+        cardinalityTarget: cardinalityToHumanLabel(range.cardinality),
+        range: {
+          iri: prepareIri(semanticModels, null, rangeEntity),
+          label: getEntityLabelToShowInDiagram(options.language, rangeEntity),
+          vocabulary: prepareVocabulary(
+            options, visualModel, semanticModels, entities, range.concept)
+        },
+      } as NodeRelationshipItem;
+    } if (isSemanticModelRelationshipProfile(entity)) {
+      const [domain, range] = selectDomainAndRange(entity.ends);
+      const rangeEntity = entities[range.concept ?? ""]?.aggregatedEntity ?? null;
+      if (rangeEntity === null) {
+        LOG.warn("Missing range.", entity);
+      }
+      nextLevel = asMandatoryLevel(range.tags ?? []);
+      nextItem = {
+        options,
+        type: NODE_ITEM_TYPE,
+        identifier: entity.id,
+        label: getEntityLabelToShowInDiagram(options.language, entity),
+        iri: prepareIri(semanticModels, null, entity),
+        profileOf: prepareProfileOf(
+          options, semanticModels, entities, entity),
+        vocabulary: prepareVocabulary(
+          options, visualModel, semanticModels, entities, entity.id),
+        cardinalitySource: cardinalityToHumanLabel(domain.cardinality),
+        cardinalityTarget: cardinalityToHumanLabel(range.cardinality),
+        range: {
+          iri: prepareIri(semanticModels, null, rangeEntity),
+          label: getEntityLabelToShowInDiagram(options.language, rangeEntity),
+          vocabulary: prepareVocabulary(
+            options, visualModel, semanticModels, entities, range.concept)
+        },
+      } as NodeRelationshipItem;
+    }
+    // Append to the list.
+    if (nextItem === null) {
+      continue;
+    }
+    if (lastLevel !== nextLevel) {
+      result.push(createTitleNode(nextLevel));
+    }
+    lastLevel = nextLevel;
+    result.push(nextItem);
+  }
+  return result;
 }
 
-function getUsageNote(
-  language: string,
-  entity: SemanticModelClass | SemanticModelRelationship |
-    SemanticModelClassUsage | SemanticModelRelationshipUsage |
-    SemanticModelClassProfile | SemanticModelRelationshipProfile) {
-  return getLocalizedStringFromLanguageString(getUsageNoteLanguageString(entity), language);
+function prepareVocabulary(
+  options: ExtendedOptions,
+  visualModel: VisualModel,
+  semanticModels: SemanticModelMap,
+  entities: SemanticEntityRecord,
+  identifier: string | null,
+): {
+  label: string,
+  iri: string | null,
+  color: string,
+}[] {
+  if (identifier === null) {
+    return [];
+  }
+  const defaultColor = configuration().defaultModelColor;
+  const result: { label: string, iri: string | null, color: string }[] = [];
+  const visited: string[] = [];
+  const stack: string[] = [identifier];
+  while (stack.length > 0) {
+    const next = stack.pop();
+    if (next === undefined || visited.includes(next)) {
+      continue;
+    }
+    visited.push(next);
+    //
+    const entity = entities[next]?.rawEntity;
+    const model = findSourceModelOfEntity(next, semanticModels);
+    if (isSemanticModelClass(entity) || isSemanticModelRelationship(entity)) {
+      result.push({
+        iri: prepareIri(semanticModels, null, entity),
+        label: getEntityLabelToShowInDiagram(options.language, entity),
+        color: visualModel.getModelColor(model?.getId() ?? "") ?? defaultColor,
+      });
+    } else if (isSemanticModelClassProfile(entity)) {
+      stack.push(...entity.profiling);
+    } else if (isSemanticModelRelationshipProfile(entity)) {
+      const { range } = getDomainAndRange(entity);
+      if (range === null) {
+        continue;
+      }
+      stack.push(...range.profiling);
+    }
+  }
+  return result;
+}
+
+function prepareIri(
+  semanticModels: SemanticModelMap,
+  semanticModel: SemanticModel | null,
+  entity: Entity | null,
+): string | null {
+  if (entity === null) {
+    // No entity return nothing.
+    return null;
+  }
+  let iri: string | null = null;
+  if (isSemanticModelClass(entity) || isSemanticModelClassProfile(entity)) {
+    iri = entity.iri;
+  } else if (isSemanticModelRelationship(entity)) {
+    const { range } = getDomainAndRange(entity);
+    iri = range?.iri ?? null;
+  } else if (isSemanticModelRelationshipProfile(entity)) {
+    const { range } = getDomainAndRange(entity);
+    iri = range?.iri ?? null;
+  } else if (isSemanticModelGeneralization(entity)) {
+    iri = entity.iri;
+  }
+  if (iri === null) {
+    // We have no IRI so return null.
+    return null;
+  }
+
+  if (isIriAbsolute(iri)) {
+    return applyIriPrefix(iri);
+  }
+
+  // For a relative IRI use model alias.
+  const model = semanticModel
+    ?? findSourceModelOfEntity(entity.id, semanticModels);
+  if (model === null || !isInMemorySemanticModel(model)) {
+    // We have no additional IRI information.
+    return ":" + iri;
+  }
+  return applyIriPrefix(model.getBaseIri() + iri);
+}
+
+function applyIriPrefix(iri: string): string {
+  const prefixes = configuration().prefixes;
+  for (const [prefix, name] of Object.entries(prefixes)) {
+    if (iri.startsWith(prefix)) {
+      return name + ":" + iri.substring(prefix.length);
+    }
+  }
+  return iri;
+}
+
+/**
+ * Collect and return direct profiles.
+ */
+function prepareProfileOf(
+  options: ExtendedOptions,
+  semanticModels: SemanticModelMap,
+  entities: SemanticEntityRecord,
+  entity: Entity | null,
+): {
+  label: string,
+  iri: string | null,
+}[] {
+  let profiling: string[] = [];
+  if (isSemanticModelClassProfile(entity)) {
+    profiling = entity.profiling;
+  } else if (isSemanticModelRelationshipProfile(entity)) {
+    const { range } = getDomainAndRange(entity);
+    if (range === null) {
+      return [];
+    }
+    profiling = range.profiling;
+  } else {
+    return [];
+  }
+  //
+  const result: { label: string, iri: string | null }[] = [];
+  for (const identifier of profiling) {
+    const entity = entities[identifier]?.aggregatedEntity;
+    if (entity === undefined) {
+      continue;
+    }
+    result.push({
+      label: getEntityLabelToShowInDiagram(options.language, entity),
+      iri: prepareIri(semanticModels, null, entity),
+    })
+  }
+  return result;
+}
+
+function createTitleNode(
+  level: CmeRelationshipProfileMandatoryLevel | null,
+): NodeTitleItem {
+  return {
+    type: NODE_TITLE_ITEM_TYPE,
+    title: selectMandatoryLevel(level) ?? "<<undefined>>",
+  }
+}
+
+function selectMandatoryLevel(
+  level: CmeRelationshipProfileMandatoryLevel | null,
+): string | null {
+  switch (level) {
+  case CmeRelationshipProfileMandatoryLevel.Mandatory:
+    return "<<mandatory>>";
+  case CmeRelationshipProfileMandatoryLevel.Optional:
+    return "<<optional>>";
+  case CmeRelationshipProfileMandatoryLevel.Recommended:
+    return "<<recommended>>";
+  }
+  return null;
+}
+
+function getEntityDescription(language: string, entity: Entity) {
+  return getLocalizedStringFromLanguageString(
+    getDescriptionLanguageString(entity), language);
 }
 
 function createDiagramEdge(
-  options: Options,
+  options: ExtendedOptions,
   visualModel: VisualModel,
-  profilingSources: (
-    | SemanticModelClass | SemanticModelRelationship
-    | SemanticModelClassUsage | SemanticModelRelationshipUsage
-    | SemanticModelClassProfile | SemanticModelRelationshipProfile)[],
-  visualNode: VisualRelationship,
-  entity: SemanticModelRelationship | SemanticModelRelationshipUsage |
-    SemanticModelGeneralization | SemanticModelRelationshipProfile,
+  semanticModels: SemanticModelMap,
+  entities: SemanticEntityRecord,
+  visualRelationship: VisualRelationship,
+  entity: SemanticModelRelationship | SemanticModelGeneralization | SemanticModelRelationshipProfile,
+  semanticModel: SemanticModel,
 ): Edge | null {
   const identifier = entity.id;
   if (isSemanticModelRelationship(entity)) {
     return createDiagramEdgeForRelationship(
-      options, visualModel, profilingSources, visualNode, entity);
-  } else if (isSemanticModelRelationshipUsage(entity)
-    || isSemanticModelRelationshipProfile(entity)) {
+      options, visualModel, semanticModels, entities, visualRelationship,
+      entity, semanticModel);
+  } else if (isSemanticModelRelationshipProfile(entity)) {
     return createDiagramEdgeForRelationshipProfile(
-      options, visualModel, profilingSources, visualNode, entity);
+      options, visualModel, semanticModels, entities, visualRelationship,
+      entity, semanticModel);
   } else if (isSemanticModelGeneralization(entity)) {
     return createDiagramEdgeForGeneralization(
-      visualModel, visualNode, entity);
+      options, visualModel, visualRelationship, entity);
   }
   throw Error(`Unknown entity type ${identifier}.`);
 }
 
 function createDiagramEdgeForRelationship(
-  options: Options,
+  options: ExtendedOptions,
   visualModel: VisualModel,
-  profilingSources: (
-    | SemanticModelClass | SemanticModelRelationship
-    | SemanticModelClassUsage | SemanticModelRelationshipUsage
-    | SemanticModelClassProfile | SemanticModelRelationshipProfile)[],
-  visualNode: VisualRelationship,
+  semanticModels: SemanticModelMap,
+  entities: SemanticEntityRecord,
+  visualRelationship: VisualRelationship,
   entity: SemanticModelRelationship,
+  semanticModel: SemanticModel
 ): Edge {
   const language = options.language;
-
-  const profileOf =
-    (isSemanticModelRelationshipUsage(entity)
-      ? profilingSources.find((e) => e.id === entity.usageOf)
-      : null
-    ) ?? null;
-
   const { domain, range } = getDomainAndRange(entity);
-
   return {
+    options,
     type: EdgeType.Association,
-    identifier: visualNode.identifier,
+    identifier: visualRelationship.identifier,
     externalIdentifier: entity.id,
     label: getEntityLabelToShowInDiagram(language, entity),
-    source: visualNode.visualSource,
+    source: visualRelationship.visualSource,
     cardinalitySource: cardinalityToHumanLabel(domain?.cardinality),
-    target: visualNode.visualTarget,
+    target: visualRelationship.visualTarget,
     cardinalityTarget: cardinalityToHumanLabel(range?.cardinality),
-    color: visualModel.getModelColor(visualNode.model) ?? DEFAULT_MODEL_COLOR,
-    waypoints: visualNode.waypoints,
-    profileOf: profileOf === null ? null : {
-      label: getEntityLabelToShowInDiagram(language, profileOf),
-      usageNote: getUsageNote(language, entity),
-    },
+    color: visualModel.getModelColor(visualRelationship.model) ?? DEFAULT_MODEL_COLOR,
+    waypoints: visualRelationship.waypoints,
+    profileOf: [],
+    vocabulary: prepareVocabulary(
+      options, visualModel, semanticModels, entities, entity.id),
+    iri: prepareIri(semanticModels, semanticModel, entity),
+    mandatoryLevelLabel: null,
   };
 }
 
 function createDiagramEdgeForRelationshipProfile(
-  options: Options,
+  options: ExtendedOptions,
   visualModel: VisualModel,
-  profilingSources: (
-    | SemanticModelClass | SemanticModelRelationship
-    | SemanticModelClassUsage | SemanticModelRelationshipUsage
-    | SemanticModelClassProfile | SemanticModelRelationshipProfile)[],
-  visualNode: VisualRelationship,
-  entity: SemanticModelRelationshipUsage | SemanticModelRelationshipProfile,
+  semanticModels: SemanticModelMap,
+  entities: SemanticEntityRecord,
+  visualRelationship: VisualRelationship,
+  entity: SemanticModelRelationshipProfile,
+  semanticModel: SemanticModel
 ): Edge {
-  const language = options.language;
-
-  const profileOf =
-    (isSemanticModelRelationshipUsage(entity)
-      ? profilingSources.find((e) => e.id === entity.usageOf)
-      : null
-    ) ?? null;
-
   const { domain, range } = getDomainAndRange(entity);
-
+  const label = getEntityLabelToShowInDiagram(options.language, entity);
+  const iri = prepareIri(semanticModels, semanticModel, entity);
+  const color = visualModel.getModelColor(visualRelationship.model) ?? DEFAULT_MODEL_COLOR;
   return {
-    type: EdgeType.Association,
-    identifier: visualNode.identifier,
+    options,
+    type: EdgeType.AssociationProfile,
+    identifier: visualRelationship.identifier,
     externalIdentifier: entity.id,
-    label: "<<profile>>\n" + getEntityLabelToShowInDiagram(language, entity),
-    source: visualNode.visualSource,
+    label,
+    iri,
+    source: visualRelationship.visualSource,
     cardinalitySource: cardinalityToHumanLabel(domain?.cardinality),
-    target: visualNode.visualTarget,
+    target: visualRelationship.visualTarget,
     cardinalityTarget: cardinalityToHumanLabel(range?.cardinality),
-    color: visualModel.getModelColor(visualNode.model) ?? DEFAULT_MODEL_COLOR,
-    waypoints: visualNode.waypoints,
-    profileOf: profileOf === null ? null : {
-      label: getEntityLabelToShowInDiagram(language, profileOf),
-      usageNote: getUsageNote(language, entity),
-    },
+    color,
+    waypoints: visualRelationship.waypoints,
+    profileOf: prepareProfileOf(
+      options, semanticModels, entities, entity),
+    vocabulary: prepareVocabulary(
+      options, visualModel, semanticModels, entities, entity.id),
+    mandatoryLevelLabel: asMandatoryLevel(range?.tags ?? []),
   };
 }
 
 function createDiagramEdgeForGeneralization(
+  diagramOptions: DiagramOptions,
   visualModel: VisualModel,
-  visualNode: VisualRelationship,
+  visualRelationship: VisualRelationship,
   entity: SemanticModelGeneralization,
 ): Edge {
+  const color = visualModel.getModelColor(visualRelationship.model) ?? DEFAULT_MODEL_COLOR;
   return {
     type: EdgeType.Generalization,
-    identifier: visualNode.identifier,
+    identifier: visualRelationship.identifier,
     externalIdentifier: entity.id,
     label: null,
-    source: visualNode.visualSource,
+    source: visualRelationship.visualSource,
     cardinalitySource: null,
-    target: visualNode.visualTarget,
+    target: visualRelationship.visualTarget,
     cardinalityTarget: null,
-    color: visualModel.getModelColor(visualNode.model) ?? DEFAULT_MODEL_COLOR,
-    waypoints: visualNode.waypoints,
-    profileOf: null,
+    color,
+    waypoints: visualRelationship.waypoints,
+    profileOf: [],
+    iri: null,
+    options: diagramOptions,
+    vocabulary: [{
+      label: null,
+      iri: null,
+      color,
+    }],
+    mandatoryLevelLabel: null,
   };
 }
 
+/**
+ * Create an edge to represent a profile between two classes.
+ */
 function createDiagramEdgeForClassUsageOrProfile(
+  diagramOptions: DiagramOptions,
   visualModel: VisualModel,
-  visualNode: VisualProfileRelationship,
-  entity: SemanticModelClassUsage | SemanticModelClassProfile,
+  visualProfileRelationship: VisualProfileRelationship,
+  entity: SemanticModelClassProfile,
 ): Edge | null {
-
   return {
     type: EdgeType.ClassProfile,
-    identifier: visualNode.identifier,
+    identifier: visualProfileRelationship.identifier,
     externalIdentifier: entity.id,
     label: "<<profile>>",
-    source: visualNode.visualSource,
+    source: visualProfileRelationship.visualSource,
     cardinalitySource: null,
-    target: visualNode.visualTarget,
+    target: visualProfileRelationship.visualTarget,
     cardinalityTarget: null,
-    color: visualModel.getModelColor(visualNode.model) ?? DEFAULT_MODEL_COLOR,
-    waypoints: visualNode.waypoints,
-    profileOf: null,
+    color: "#000000",
+    waypoints: visualProfileRelationship.waypoints,
+    profileOf: [],
+    iri: null,
+    options: diagramOptions,
+    vocabulary: [],
+    mandatoryLevelLabel: null,
+  };
+}
+
+function createGroupNode(visualGroup: VisualGroup): Group {
+  return {
+    identifier: visualGroup.identifier,
   };
 }
 
@@ -604,11 +794,10 @@ function createDiagramEdgeForClassUsageOrProfile(
  * This method is also called when there is a change in model color!
  */
 function onChangeVisualEntities(
-  options: Options,
+  options: ExtendedOptions,
   visualModel: VisualModel | null,
   diagram: UseDiagramType | null,
   aggregatorView: SemanticModelAggregatorView,
-  classesContext: UseClassesContextType,
   graphContext: UseModelGraphContextType,
   changes: {
     previous: VisualEntity | null;
@@ -627,21 +816,11 @@ function onChangeVisualEntities(
 
   const models = graphContext.models;
   const entities = aggregatorView.getEntities();
-  const relationships = classesContext.relationships;
-  const relationshipsUsages = classesContext.usages.filter(isSemanticModelRelationshipUsage);;
-  const relationshipsProfiles = classesContext.relationshipProfiles;
-
-  const profilingSources = [
-    ...classesContext.classes,
-    ...classesContext.relationships,
-    ...classesContext.usages,
-    ...classesContext.classProfiles,
-    ...classesContext.relationshipProfiles,
-  ];
-
   const actions = diagram.actions();
 
-  const groups = changes.filter(({ previous, next }) => (previous !== null && isVisualGroup(previous)) || (next !== null && isVisualGroup(next)));
+  const groups = changes.filter(({ previous, next }) =>
+    (previous !== null && isVisualGroup(previous))
+    || (next !== null && isVisualGroup(next)));
 
   const nodeIdToParentGroupIdMap: Record<string, string> = {};
   for (const { previous, next } of groups) {
@@ -654,7 +833,8 @@ function onChangeVisualEntities(
     if (next === null) {
       continue;
     }
-    const nextVisualGroup = next as VisualGroup;        // Have to cast, even though we know the type
+    // Have to cast, even though we know the type
+    const nextVisualGroup = next as VisualGroup;
     const group = createGroupNode(nextVisualGroup);
 
     if (previous === null) {
@@ -663,8 +843,8 @@ function onChangeVisualEntities(
       nextVisualGroup.content.forEach(nodeIdGroupId => {
         nodeIdToParentGroupIdMap[nodeIdGroupId] = group.identifier;
       });
-    }
-    else {          // Change of existing - occurs when removing node from canvas
+    } else {
+      // Change of existing - occurs when removing node from canvas
       actions.setGroup(group, nextVisualGroup.content);
     }
   }
@@ -672,12 +852,25 @@ function onChangeVisualEntities(
   for (const { previous, next } of changes) {
     if (next !== null) {
       // New or changed entity.
-      if (isVisualNode(next)) {
+      if (isVisualDiagramNode(next)) {
+        let group: string | null = null;
+        if (nodeIdToParentGroupIdMap[next.identifier] !== undefined) {
+          group = nodeIdToParentGroupIdMap[next.identifier];
+        }
+
+        const node = createVisualModelDiagramNode(
+          options, aggregatorView.getAvailableVisualModels(), next, group);
+        if (previous === null) {
+          // Create new entity.
+          actions.addNodes([node]);
+        } else {
+          // Change of existing.
+          actions.updateNodes([node]);
+        }
+      } else if (isVisualNode(next)) {
         const entity = entities[next.representedEntity]?.aggregatedEntity ?? null;
 
-        if (!isSemanticModelClass(entity)
-          && !isSemanticModelClassUsage(entity)
-          && !isSemanticModelClassProfile(entity)) {
+        if (!isSemanticModelClass(entity) && !isSemanticModelClassProfile(entity)) {
           LOG.error(
             "In visual update semantic entity is not class/usage/profile.",
             { entity, visual: next });
@@ -696,9 +889,7 @@ function onChangeVisualEntities(
         }
 
         const node = createDiagramNode(
-          options, visualModel,
-          relationships, relationshipsUsages, relationshipsProfiles, profilingSources,
-          next, entity, model, group);
+          options, visualModel, models, entities, next, entity, model, group);
 
         if (previous === null) {
           // Create new entity.
@@ -713,11 +904,11 @@ function onChangeVisualEntities(
 
         const isRelationship =
           isSemanticModelRelationship(entity) ||
-          isSemanticModelRelationshipUsage(entity) ||
           isSemanticModelGeneralization(entity) ||
           isSemanticModelRelationshipProfile(entity);
         if (!isRelationship) {
-          console.error("In visual update semantic entity is not a relationship.", { entity, visual: next });
+          console.error("In visual update semantic entity is not a relationship.",
+            { entity, visual: next });
           continue;
         }
 
@@ -727,7 +918,8 @@ function onChangeVisualEntities(
           continue;
         }
 
-        const edge = createDiagramEdge(options, visualModel, profilingSources, next, entity);
+        const edge = createDiagramEdge(
+          options, visualModel, models, entities, next, entity, model);
 
         if (edge === null) {
           console.error("In visual update created edge is null.", { entity, visual: next });
@@ -746,12 +938,12 @@ function onChangeVisualEntities(
         const entity = entities[next.entity]?.aggregatedEntity ?? null;
 
         const profiled: EntityDsIdentifier[] = [];
-        if (isSemanticModelClassUsage(entity)) {
-          profiled.push(entity.usageOf);
-        } else if (isSemanticModelClassProfile(entity)) {
+        if (isSemanticModelClassProfile(entity)) {
           profiled.push(...entity.profiling);
         } else {
-          console.error("Ignored profile relation as entity is not a usage or a profile.", { entity, visualEntity: next });
+          console.error(
+            "Ignored profile relation as entity is not a usage or a profile.",
+            { entity, visualEntity: next });
           continue;
         }
         // We can have multiple candidates, but we can add only the one represented
@@ -767,7 +959,8 @@ function onChangeVisualEntities(
               continue;
             }
             //
-            const edge = createDiagramEdgeForClassUsageOrProfile(visualModel, next, entity);
+            const edge = createDiagramEdgeForClassUsageOrProfile(
+              options, visualModel, next, entity);
             if (edge === null) {
               console.error("Ignored null edge.", { visualEntity: next, entity });
               break;
@@ -798,6 +991,8 @@ function onChangeVisualEntities(
         actions.removeNodes([previous.identifier]);
       } else if (isVisualRelationship(previous) || isVisualProfileRelationship(previous)) {
         actions.removeEdges([previous.identifier]);
+      } else if (isVisualDiagramNode(previous)) {
+        actions.removeNodes([previous.identifier]);
       } else {
         // We ignore other properties.
       }

@@ -428,7 +428,7 @@ export class ApplicationProfileAggregator implements SemanticModelAggregator {
       return null;
     }
 
-    // specific class - generic class
+    // Load local profile-generalizations: specific class - generic class
     const generalizations: Map<string, Map<string, LocalEntityWrapped<SemanticModelGeneralization>>> = new Map();
     for (const entity of Object.values(this.entities)) {
       const semanticEntity = entity.aggregatedEntity;
@@ -469,7 +469,7 @@ export class ApplicationProfileAggregator implements SemanticModelAggregator {
         }
       }
     }
-    subProfiles.map(entity => fullCompleteHierarchy[entity.aggregatedEntity.id] = ({
+    subProfiles.forEach(entity => fullCompleteHierarchy[entity.aggregatedEntity.id] = ({
       aggregatedEntity: entity.aggregatedEntity,
       vocabularyChain: [this.thisVocabularyChain],
       originatingModel: [this],
@@ -504,7 +504,11 @@ export class ApplicationProfileAggregator implements SemanticModelAggregator {
 
     // Now we need hierarchy for each class profile.
     if (this.canAddEntities && this.canModify) {
-      for (const superProfile of superProfiles) {
+      const hierarchyProfiles = [
+        ...subProfiles.map(p => [false, p]),
+        ...superProfiles.map(p => [true, p]),
+      ] as [boolean, LocalEntityWrapped][];
+      for (const [isAncestorNotDescendant, superProfile] of hierarchyProfiles) {
         if (!isSemanticModelClass(superProfile.aggregatedEntity) && !isSemanticModelClassProfile(superProfile.aggregatedEntity)) {
           continue;
         }
@@ -522,7 +526,7 @@ export class ApplicationProfileAggregator implements SemanticModelAggregator {
           // @ts-ignore
           hierarchy.filter(entity => isSemanticModelClass(entity.aggregatedEntity)).forEach(entity => entity.viaExternalEntity = id);
 
-          const generalization = this.getFakeGeneralization(superProfile.aggregatedEntity.id, id);
+          const generalization = isAncestorNotDescendant ? this.getFakeGeneralization(superProfile.aggregatedEntity.id, id) : this.getFakeGeneralization(id, superProfile.aggregatedEntity.id);
           fullCompleteHierarchy[generalization.aggregatedEntity.id] = {
             aggregatedEntity: generalization.aggregatedEntity,
             vocabularyChain: [this.thisVocabularyChain],
@@ -597,7 +601,7 @@ export class ApplicationProfileAggregator implements SemanticModelAggregator {
 
     const isAttribute = isSemanticModelRelationPrimitive(entity.aggregatedEntity);
     const conceptId = sourceEntity.aggregatedEntity.ends[direction ? 1 : 0]!.concept;
-    const classProfileId = isAttribute ? conceptId : this.createClassProfile([conceptId!]).aggregatedEntity.id;
+    const classProfileId = isAttribute ? conceptId : this.createOrReuseClassProfile([conceptId!]).aggregatedEntity.id;
 
     // Create the relationship
     if (direction) {
@@ -647,6 +651,25 @@ export class ApplicationProfileAggregator implements SemanticModelAggregator {
     const { id } = this.profile.executeOperation(operation) as CreatedEntityOperationResult;
 
     return this.entities[id] as LocalEntityWrapped<SemanticModelRelationship>;
+  }
+
+  /**
+   * This function tries to reuse the first class that suits the given profiling.
+   */
+  private createOrReuseClassProfile(profiling: string[]): LocalEntityWrapped<SemanticModelClassProfile & SemanticModelClass> {
+    const suitableClassProfile = Object.values(this.entities).find(entity => {
+      if (!isSemanticModelClassProfile(entity.aggregatedEntity)) {
+        return false;
+      }
+      const thisProfiling = entity.aggregatedEntity.profiling;
+      return thisProfiling.length === profiling.length && thisProfiling.every(p => profiling.includes(p));
+    });
+
+    if (suitableClassProfile) {
+      return suitableClassProfile as LocalEntityWrapped<SemanticModelClassProfile & SemanticModelClass>;
+    }
+
+    return this.createClassProfile(profiling);
   }
 
   private createClassProfile(profiling: string[]): LocalEntityWrapped<SemanticModelClassProfile & SemanticModelClass> {

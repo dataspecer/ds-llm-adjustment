@@ -1,4 +1,3 @@
-import { DataSpecification } from "@dataspecer/backend-utils/connectors/specification";
 import { DataSpecificationConfiguration, DataSpecificationConfigurator } from "@dataspecer/core/data-specification/configuration";
 import AddIcon from "@mui/icons-material/Add";
 import LoadingButton from "@mui/lab/LoadingButton";
@@ -9,12 +8,12 @@ import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router-dom";
 import { BackendConnectorContext, DefaultConfigurationContext } from "../../../application";
 import { LanguageStringText } from "../../../editor/components/helper/LanguageStringComponents";
-import { provideConfiguration } from "../../../editor/configuration/provided-configuration";
+import { modelRepository, getConfiguration } from "../../../generators/configuration/provided-configuration";
 import { useDialog } from "../../../editor/dialog";
 import { ConfigureArtifacts } from "../../artifacts/configuration/configure-artifacts";
 import { ConfigureButton } from "../../artifacts/configuration/configure-button";
-import { DefaultArtifactBuilder } from "../../artifacts/default-artifact-builder";
-import { GenerateReport } from "../../artifacts/generate-report";
+import { DefaultArtifactBuilder } from "@dataspecer/specification/v1";
+import { GenerateReport } from "@dataspecer/specification/v1";
 import { DeleteDataSchemaForm } from "../../components/delete-data-schema-form";
 import { SpecificationTags } from "../../components/specification-tags";
 import { getEditorLink } from "../../shared/get-schema-generator-link";
@@ -22,10 +21,12 @@ import { ConceptualModelTargets } from "./conceptual-model-targets";
 import { CopyIri } from "./copy-iri";
 import { DataStructureBox } from "./data-structure-row";
 import { GeneratingDialog } from "./generating-dialog";
-import { ModifySpecification } from "./modify-specification";
 import { RedirectDialog } from "./redirect-dialog";
 import { ReuseDataSpecifications } from "./reuse-data-specifications";
 import { AllSpecificationsContext, SpecificationContext } from "./specification";
+import { loadDataSpecifications } from "@dataspecer/specification/specification";
+import { CoreResourceReader } from "@dataspecer/core/core/core-reader";
+import { ZipStreamDictionary } from "../../../generators/zip-stream-dictionary";
 
 export const DocumentationSpecification = memo(() => {
   const { t } = useTranslation("ui");
@@ -57,23 +58,8 @@ export const DocumentationSpecification = memo(() => {
     setGenerateState([]);
     setGenerateDialogOpen(true);
 
-    // Gather all data specifications
-
-    // We know, that the current data specification must be present
-    let gatheredDataSpecifications: Record<string, DataSpecification> = {};
-
-    const toProcessDataSpecification = [dataSpecificationIri as string];
-    for (let i = 0; i < toProcessDataSpecification.length; i++) {
-      const dataSpecification = await backendConnector.getDataSpecification(toProcessDataSpecification[i]);
-      gatheredDataSpecifications[dataSpecification.id as string] = dataSpecification;
-      dataSpecification.importsDataSpecificationIds.forEach((importedDataSpecificationId) => {
-        if (!toProcessDataSpecification.includes(importedDataSpecificationId)) {
-          toProcessDataSpecification.push(importedDataSpecificationId);
-        }
-      });
-      // @ts-ignore
-      dataSpecification.artefactConfiguration = await backendConnector.getArtifactConfiguration(dataSpecification.artifactConfigurations[0].id);
-    }
+    // Gather all data specifications that are needed for the generation
+    let gatheredDataSpecifications = await loadDataSpecifications(dataSpecificationIri as string, modelRepository); // todo we probably do not need this
 
     // Override base urls to null
     if (overrideBasePathsToNull) {
@@ -87,14 +73,15 @@ export const DocumentationSpecification = memo(() => {
       }
     }
 
-    const { store: federatedStore, dataSpecifications: ds2 } = await provideConfiguration(dataSpecificationIri as string, "");
+    const { store: federatedStore, dataSpecifications: ds2 } = await getConfiguration(dataSpecificationIri as string, "");
 
     setZipLoading("generating");
 
-    // @ts-ignore
-    const generator = new DefaultArtifactBuilder(federatedStore, ds2, defaultConfiguration);
+    const generator = new DefaultArtifactBuilder(federatedStore as CoreResourceReader, ds2, defaultConfiguration, fetch, modelRepository);
     await generator.prepare(Object.keys(ds2), setGenerateState);
-    const data = await generator.build();
+    const zip = new ZipStreamDictionary();
+    await generator.build(zip);
+    const data = await zip.save();
     saveAs(data, "artifact.zip");
     setZipLoading(false);
   };
@@ -113,7 +100,6 @@ export const DocumentationSpecification = memo(() => {
         <div style={{ display: "flex", gap: "1rem" }}>
           <ConfigureButton />
           <CopyIri iri={dataSpecificationIri} />
-          <ModifySpecification />
         </div>
       </Box>
       <SpecificationTags specification={specification} />
@@ -202,21 +188,10 @@ export const DocumentationSpecification = memo(() => {
             <LoadingButton onClick={() => generateZip(configuration.id, true)} loading={zipLoading !== false}>
               {t("generate zip file with relative paths")}
             </LoadingButton>
-            <Button variant="contained" href={import.meta.env.VITE_BACKEND + "/generate?iri=" + encodeURIComponent(dataSpecificationIri)}>
-              Generate sample application
-            </Button>
           </Box>
         ))}
 
       <ConceptualModelTargets />
-
-      {/* <Typography variant="h5" component="div" gutterBottom sx={{mt: 5}}>
-            Advanced
-        </Typography>
-
-        <GarbageCollection dataSpecificationIri={dataSpecificationIri} />
-        <ConsistencyFix dataSpecificationIri={dataSpecificationIri} />
-        <UpdatePim dataSpecificationIri={dataSpecificationIri} /> */}
 
       <RedirectDialog isOpen={redirecting} />
       <DeleteForm.Component />

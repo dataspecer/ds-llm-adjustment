@@ -163,6 +163,7 @@ export function createNewBaseEntityProfileDialogState<
 
   const source = profiles[0];
   const usageNoteSource = availableUsageNoteSources[0];
+  const usageNote = usageNoteSource.usageNote ?? {};
   return {
     language,
     // Model
@@ -197,7 +198,7 @@ export function createNewBaseEntityProfileDialogState<
     availableSpecializations,
     specializations: [],
     // Usage note.
-    usageNote: {},
+    usageNote,
     overrideUsageNote: usageNoteSource === noProfile,
     usageNoteSource: usageNoteSource,
     usageNoteSourceValue: usageNoteSource.usageNote ?? {},
@@ -316,13 +317,19 @@ export function createEditBaseEntityProfileDialogState
     availableUsageNoteSources.push(noProfile);
   }
 
+  const overrideName = nameSourceIdentifier === null;
+
   const nameSource =
     profiles.find(item => item.identifier === nameSourceIdentifier)
     ?? profiles[0];
 
+  const overrideDescription = descriptionSourceIdentifier === null;
+
   const descriptionSource =
     profiles.find(item => item.identifier === descriptionSourceIdentifier)
     ?? profiles[0];
+
+  const overrideUsageNote = usageNoteSourceIdentifier === null;
 
   const usageNoteSource =
     availableUsageNoteSources.find(item => item.identifier === usageNoteSourceIdentifier)
@@ -333,6 +340,12 @@ export function createEditBaseEntityProfileDialogState
       .filter(item => item.model === model.identifier)
       .filter(item => item.identifier !== entity.identifier));
   sortRepresentatives(language, availableSpecializations);
+
+  const availableProfiles = sanitizeDuplicitiesInRepresentativeLabels(
+    allModels, allProfiles);
+  sortRepresentatives(language, availableProfiles);
+
+  console.log("createEditBaseEntityProfileDialogState", { description, descriptionSourceValue: descriptionSource.description });
 
   return {
     language,
@@ -347,25 +360,27 @@ export function createEditBaseEntityProfileDialogState
     isIriRelative: isRelativeIri(iri),
     iriValidation: validationNoProblem(),
     // Profile
-    availableProfiles: sanitizeDuplicitiesInRepresentativeLabels(
-      allModels, allProfiles),
+    availableProfiles,
     profiles,
     noProfile,
     // Name
-    name: name ?? {},
-    overrideName: nameSourceIdentifier === null,
+    name: (overrideName
+      ? name : nameSource.label) ?? {},
+    overrideName,
     nameSource,
     nameSourceValue: nameSource.label,
     hideNameProfile: profiles[0] === noProfile,
     // Description
-    description: description ?? {},
-    overrideDescription: descriptionSourceIdentifier === null,
+    description: (overrideDescription
+      ? description : descriptionSource.description) ?? {},
+    overrideDescription,
     descriptionSource,
     descriptionSourceValue: descriptionSource.description,
     hideDescriptionProfile: profiles[0] === noProfile,
     // Usage note
-    usageNote: usageNote ?? {},
-    overrideUsageNote: usageNoteSourceIdentifier === null,
+    usageNote: (overrideUsageNote ?
+      usageNote : usageNoteSource?.usageNote) ?? {},
+    overrideUsageNote,
     usageNoteSource,
     usageNoteSourceValue: usageNoteSource?.usageNote ?? {},
     availableUsageNoteSources,

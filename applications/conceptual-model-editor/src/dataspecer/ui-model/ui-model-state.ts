@@ -1,16 +1,55 @@
 import { AggregatedEntityWrapper, SemanticModelAggregatorView } from "@dataspecer/core-v2/semantic-model/aggregator";
-import { UI_UNKNOWN_ENTITY_TYPE, UiClass, UiClassProfile, UiEntity, UiGeneralization, UiPrimitiveType, UiRelationship, UiRelationshipProfile, UiSemanticModel } from "./model";
-import { cmeClassAggregateToUiClassProfile, cmeClassToUiClass, cmeGeneralizationToCmeGeneralization, cmePrimitiveTypeToUiPrimitiveType, cmeRelationshipAggregateToUiRelationshipProfile, cmeRelationshipToUiRelationship, cmeSemanticModelToUiSemanticModel } from "./adapter";
+import {
+  UI_UNKNOWN_ENTITY_TYPE,
+  UiClass,
+  UiClassProfile,
+  UiEntity,
+  UiGeneralization,
+  UiPrimitiveType,
+  UiRelationship,
+  UiRelationshipProfile,
+  UiSemanticModel,
+} from "./model";
+import {
+  cmeClassAggregateToUiClassProfile,
+  cmeClassToUiClass,
+  cmeGeneralizationToCmeGeneralization,
+  cmePrimitiveTypeToUiPrimitiveType,
+  cmeRelationshipAggregateToUiRelationshipProfile,
+  cmeRelationshipToUiRelationship,
+  cmeSemanticModelToUiSemanticModel,
+} from "./adapter";
 import { HexColor, VisualModel } from "@dataspecer/core-v2/visual-model";
 import { SemanticModel } from "../semantic-model";
 import { createLogger } from "../../application";
 import { createUiAdapterContext, UiAdapterContext } from "./adapter/adapter-context";
-import { isSemanticModelClass, isSemanticModelGeneralization, isSemanticModelRelationship } from "@dataspecer/core-v2/semantic-model/concepts";
-import { isSemanticModelClassProfile, isSemanticModelRelationshipProfile } from "@dataspecer/core-v2/semantic-model/profile/concepts";
-import { listCmePrimitiveTypes, semanticClassToCmeClass, semanticGeneralizationToCmeGeneralization, semanticRelationshipToCmeRelationship } from "../cme-model/adapter";
+import {
+  isSemanticModelClass,
+  isSemanticModelGeneralization,
+  isSemanticModelRelationship,
+} from "@dataspecer/core-v2/semantic-model/concepts";
+import {
+  isSemanticModelClassProfile,
+  isSemanticModelRelationshipProfile,
+} from "@dataspecer/core-v2/semantic-model/profile/concepts";
+import {
+  listCmePrimitiveTypes,
+  semanticClassToCmeClass,
+  semanticGeneralizationToCmeGeneralization,
+  semanticRelationshipToCmeRelationship,
+} from "../cme-model/adapter";
 import { semanticClassProfileToCmeClassAggregate } from "../cme-model/adapter/cme-class-profile-aggregate";
-import { semanticRelationshipProfileToCmeRelationshipAggregate } from "../cme-model/adapter/cme-relationship-aggregate-adapter";
-import { OwlCmeSemanticModel, OwlThingCmeEntity, UnknownCmeEntity, UnknownCmeSemanticModel, UnspecifiedCmeEntity, semanticModelToCmeSemanticModel } from "../cme-model";
+import {
+  semanticRelationshipProfileToCmeRelationshipAggregate,
+} from "../cme-model/adapter/cme-relationship-aggregate-adapter";
+import {
+  OwlCmeSemanticModel,
+  OwlThingCmeEntity,
+  UnknownCmeEntity,
+  UnknownCmeSemanticModel,
+  UnspecifiedCmeEntity,
+  semanticModelToCmeSemanticModel,
+} from "../cme-model";
 import { languageStringToString } from "../../utilities/string";
 import { EntityDsIdentifier } from "../entity-model";
 import { Entity } from "@dataspecer/core-v2";
@@ -220,16 +259,22 @@ function withEntities<Type extends Entity>(
 ): void {
   for (const model of semanticModels) {
     const uiSemanticModel = secureUiSemanticModel(state, model);
-    for (const entityIdentifier of Object.keys(model.getEntities())) {
+    for (const [entityIdentifier, entity] of Object.entries(model.getEntities())) {
       const wrap = aggregatorEntities[entityIdentifier];
-      const raw = wrap.rawEntity;
-      const aggregate = wrap.aggregatedEntity;
+      if (wrap === undefined) {
+        LOG.invalidEntity(entityIdentifier,
+          "Wrap for an entity is undefined.",
+          { entity });
+        continue;
+      }
+      const raw = wrap?.rawEntity;
+      const aggregate = wrap?.aggregatedEntity;
       if (raw === null || aggregate === null) {
         // This should not happen, if it does it will produce a lot of
         // messages as this function is called multiple times.
         LOG.invalidEntity(entityIdentifier,
           "Raw entity or aggregate are null.",
-          { raw, aggregate });
+          { entity, raw, aggregate });
         continue;
       }
       if (filter(raw) && filter(aggregate)) {

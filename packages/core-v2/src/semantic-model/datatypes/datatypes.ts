@@ -1,6 +1,6 @@
-
 const XsdSimpleTypeURIs = [
     "http://www.w3.org/2001/XMLSchema#string",
+    "http://www.w3.org/2001/XMLSchema#token",
     "http://www.w3.org/2001/XMLSchema#boolean",
     "http://www.w3.org/2001/XMLSchema#decimal",
     "http://www.w3.org/2001/XMLSchema#integer",
@@ -11,6 +11,7 @@ const XsdSimpleTypeURIs = [
     "http://www.w3.org/2001/XMLSchema#gYear",
     "http://www.w3.org/2001/XMLSchema#time",
     "http://www.w3.org/2001/XMLSchema#dateTime",
+    "http://www.w3.org/2001/XMLSchema#dateTimeStamp",
     "http://www.w3.org/2001/XMLSchema#duration",
     "http://www.w3.org/2001/XMLSchema#base64Binary",
     "http://www.w3.org/2001/XMLSchema#hexBinary",
@@ -30,11 +31,18 @@ const SGovTypeURIs = [
     "https://ofn.gov.cz/zdroj/základní-datové-typy/2020-07-01/text",
 ];
 
+const GeoSPARQLURIs = [
+    "http://www.opengis.net/ont/geosparql#wktLiteral",
+    "http://www.opengis.net/ont/geosparql#gmlLiteral",
+    "http://www.opengis.net/ont/geosparql#geoJSONLiteral",
+];
+
 export const DataTypeURIs = [
     ...XsdSimpleTypeURIs,
     ...RdfTypeURIs,
     ...RdfsTypeURIs,
     ...SGovTypeURIs,
+    ...GeoSPARQLURIs,
 ];
 
 const PRIMITIVE_TYPES: Set<string> = new Set([
@@ -77,9 +85,16 @@ export const isRdfDataType = (uri: string) => {
 /**
  * @deprecated
  */
+export const isGeoSPARQLDataType = (uri: string) => {
+    return GeoSPARQLURIs.includes(uri);
+};
+
+/**
+ * @deprecated
+ */
 export const isDataType = (uri: string | null): uri is string => {
     if (!uri) {
         return false;
     }
-    return isXsdSimpleDataType(uri) || isRdfDataType(uri) || uri === "http://www.w3.org/2000/01/rdf-schema#Literal" || uri.startsWith("https://ofn.gov.cz/zdroj/základní-datové-typy/"); // || isOtherDataType(uri)...
+    return isXsdSimpleDataType(uri) || isRdfDataType(uri) || isGeoSPARQLDataType(uri)|| uri === "http://www.w3.org/2000/01/rdf-schema#Literal" || uri.startsWith("https://ofn.gov.cz/zdroj/základní-datové-typy/"); // || isOtherDataType(uri)...
 };

@@ -2,7 +2,7 @@ import { useModelGraphContext } from "../context/model-context";
 import { useActions } from "../action/actions-react-binding";
 import { renderCatalogTree } from "./catalog-view";
 import { useOptions } from "../configuration";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useController } from "./catalog-controller";
 import { createDefaultCatalogState } from "./catalog-state-factory";
 
@@ -15,10 +15,15 @@ export const Catalog = () => {
 
   const visualModel = aggregatorView.getActiveVisualModel();
 
+  // Controller.
+  const controller = useMemo(
+    () => useController(actions, setState),
+    [actions, setState]);
+
   // Initial state and full reloads.
   useEffect(() => {
     controller.buildLayout(aggregatorView, models, language);
-  }, [aggregatorView, models, language]);
+  }, [controller, aggregatorView, models, language]);
 
   // React to change of the semantic model.
   useEffect(() => {
@@ -26,7 +31,7 @@ export const Catalog = () => {
       controller.buildLayout(aggregatorView, models, language);
     });
     return () => unsubscribe();
-  }, [aggregatorView, models, language]);
+  }, [controller, aggregatorView, models, language]);
 
   // React to changes of the visual model.
   useEffect(() => {
@@ -42,10 +47,7 @@ export const Catalog = () => {
       },
     });
     return () => unsubscribe();
-  }, [aggregatorView, visualModel]);
-
-  // Controller.
-  const controller = useController(actions, setState);
+  }, [controller, aggregatorView, visualModel, language, models]);
 
   return renderCatalogTree(controller, state);
 };

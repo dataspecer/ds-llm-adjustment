@@ -1,9 +1,13 @@
+import { DiagramOptions } from "./model";
+
 export type DiagramNodeTypes = Node | VisualModelDiagramNode;
 
 /**
  * Node can be a class or a class profile.
  */
 export type Node = {
+
+  options: DiagramOptions;
 
   type: NodeType;
 
@@ -28,7 +32,7 @@ export type Node = {
   description: string | null;
 
   /**
-   * Full IRI of represented entity or null.
+   * Absolute, prefixed or relative IRI of the represented entity.
    */
   iri: string | null;
 
@@ -47,13 +51,35 @@ export type Node = {
    */
   position: AnchoredPosition;
 
-  profileOf: null | {
+  /**
+   * Directly profiled entities.
+   */
+  profileOf: {
 
     label: string;
 
-    usageNote: string | null;
+    /**
+     * Absolute, prefixed or relative IRI of the represented entity.
+     */
+    iri: string | null;
 
-  }
+  }[];
+
+  /**
+   * Profiled vocabulary entities.
+   */
+  vocabulary: {
+
+    label: string | null;
+
+    /**
+     * Absolute, prefixed or relative IRI of the represented entity.
+     */
+    iri: string | null;
+
+    color: string;
+
+  }[];
 
   /**
    * Node content, i.e. attributes, properties.
@@ -93,11 +119,6 @@ export type VisualModelDiagramNode = {
    * Human readable label.
    */
   label: string;
-
-  /**
-   * Human readable description.
-   */
-  description: string | null;
 
   /**
    * The alias of the represented visual model
@@ -148,17 +169,73 @@ export const NODE_ITEM_TYPE = "node-relationship-item";
 
 export interface NodeRelationshipItem extends NodeItem {
 
+  options: DiagramOptions;
+
   type: typeof NODE_ITEM_TYPE;
 
   identifier: string;
 
   label: string;
 
-  profileOf: null | {
+  /**
+   * Absolute, prefixed or relative IRI of the represented entity.
+   */
+  iri: string | null;
+
+  /**
+   * Directly profiled entities.
+   */
+  profileOf: {
 
     label: string;
 
-    usageNote: string | null;
+    /**
+     * Absolute, prefixed or relative IRI of the represented entity.
+     */
+    iri: string | null;
+
+  }[];
+
+  /**
+   * Profiled vocabulary entities.
+   */
+  vocabulary: {
+
+    label: string | null;
+
+    /**
+     * Absolute, prefixed or relative IRI of the represented entity.
+     */
+    iri: string | null;
+
+  }[];
+
+  cardinalitySource: string | null;
+
+  cardinalityTarget: string | null;
+
+  range: null | {
+
+    label: string;
+
+    /**
+     * Absolute, prefixed or relative IRI of the represented entity.
+     */
+    iri: string | null;
+
+    /**
+     * Profiled vocabulary entities.
+     */
+    vocabulary: {
+
+      label: string | null;
+
+      /**
+       * Absolute, prefixed or relative IRI of the represented entity.
+       */
+      iri: string | null;
+
+    }[];
 
   }
 
@@ -186,6 +263,10 @@ export function isNodeTitleItem(
   return node.type === NODE_TITLE_ITEM_TYPE;
 }
 
+/**
+ * Type representing group. It is currently used purely as API object to get group data
+ * from visual model to the diagram component.
+ */
 export type GroupWithContent = {
 
   /**
@@ -209,12 +290,24 @@ export type Group = {
 
 }
 
+/**
+ * Represents positional data related to Viewport, that is position, width and height.
+ */
 export type ViewportDimensions = {
 
+  /**
+   * Top left position of the viewport.
+   */
   position: Position;
 
+  /**
+   * Viewport's width, that is how much space does the HTML element takes on the screen.
+   */
   width: number;
 
+  /**
+   * Viewport's height, that is how much space does the HTML element takes on the screen.
+   */
   height: number;
 
 }
@@ -223,6 +316,8 @@ export type ViewportDimensions = {
  * Any form of relation that should be rendered as an edge.
  */
 export type Edge = {
+
+  options: DiagramOptions;
 
   type: EdgeType;
 
@@ -237,6 +332,11 @@ export type Edge = {
    * Human readable label.
    */
   label: string | null;
+
+  /**
+   * Absolute, prefixed or relative IRI of the represented entity.
+   */
+  iri: string | null;
 
   source: string;
 
@@ -253,13 +353,37 @@ export type Edge = {
 
   waypoints: Waypoint[];
 
-  profileOf: null | {
+  mandatoryLevelLabel: string | null;
+
+  /**
+   * Directly profiled entities.
+   */
+  profileOf: {
 
     label: string;
 
-    usageNote: string | null;
+    /**
+     * Absolute, prefixed or relative IRI of the represented entity.
+     */
+    iri: string | null;
 
-  }
+  }[];
+
+  /**
+   * Profiled vocabulary entities.
+   */
+  vocabulary: {
+
+    label: string | null;
+
+    /**
+     * Absolute, prefixed or relative IRI of the represented entity.
+     */
+    iri: string | null;
+
+    color: string;
+
+  }[];
 
 }
 

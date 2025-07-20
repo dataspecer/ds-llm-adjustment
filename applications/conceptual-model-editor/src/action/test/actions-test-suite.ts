@@ -15,17 +15,60 @@ import {
 import { UseDiagramType } from "../../diagram/diagram-hook";
 import { UseNotificationServiceWriterType } from "../../notification/notification-service-context";
 import { ClassesContextType } from "@/context/classes-context";
-import { SemanticModelClass, SemanticModelRelationship } from "@dataspecer/core-v2/semantic-model/concepts";
-import { createClass, CreatedEntityOperationResult, createGeneralization, createRelationship } from "@dataspecer/core-v2/semantic-model/operations";
+import {
+  isSemanticModelAttribute,
+  isSemanticModelClass,
+  isSemanticModelGeneralization,
+  isSemanticModelRelationship,
+  SEMANTIC_MODEL_GENERALIZATION,
+  SemanticModelClass,
+  SemanticModelGeneralization,
+  SemanticModelRelationship
+} from "@dataspecer/core-v2/semantic-model/concepts";
+import {
+  createClass,
+  CreatedEntityOperationResult,
+  createGeneralization,
+  createRelationship
+} from "@dataspecer/core-v2/semantic-model/operations";
 import { InMemorySemanticModel } from "@dataspecer/core-v2/semantic-model/in-memory";
 import { SetStateAction } from "react";
-import { createDefaultVisualModelFactory, isVisualNode, VisualDiagramNode, WritableVisualModel } from "@dataspecer/core-v2/visual-model";
-import { SemanticModelAggregator, SemanticModelAggregatorView } from "@dataspecer/core-v2/semantic-model/aggregator";
+import {
+  createDefaultVisualModelFactory,
+  isVisualNode,
+  VisualDiagramNode,
+  WritableVisualModel
+} from "@dataspecer/core-v2/visual-model";
+import {
+  SemanticModelAggregator,
+  SemanticModelAggregatorView
+} from "@dataspecer/core-v2/semantic-model/aggregator";
 import { XY } from "@dataspecer/layout";
 import { ModelGraphContextType, UseModelGraphContextType } from "@/context/model-context";
 import { CmeSpecialization } from "@/dataspecer/cme-model/model";
 import { addVisualDiagramNode } from "@/dataspecer/visual-model/operation/add-visual-diagram-node";
-import { fail } from "@/utilities/fail-test";
+import {
+  isSemanticModelClassProfile,
+  isSemanticModelRelationshipProfile,
+  SemanticModelClassProfile,
+  SemanticModelRelationshipProfile
+} from "@dataspecer/core-v2/semantic-model/profile/concepts";
+import { addSemanticGeneralizationToVisualModelAction } from "../add-generalization-to-visual-model";
+import { addSemanticRelationshipToVisualModelAction } from "../add-relationship-to-visual-model";
+import { addSemanticRelationshipProfileToVisualModelAction } from "../add-relationship-profile-to-visual-model";
+import { createCmeClassProfile } from "@/dataspecer/cme-model/operation/create-cme-class-profile";
+import { createCmeRelationshipProfile } from "@/dataspecer/cme-model/operation/create-cme-relationship-profile";
+import {
+  addVisualRelationshipsWithSpecifiedVisualEnds
+} from "@/dataspecer/visual-model/operation/add-visual-relationships";
+import { createCmeModelOperationExecutor } from "@/dataspecer/cme-model";
+import { representRdfsLiteral } from "@/dialog/utilities/dialog-utilities";
+
+export enum TestedSemanticConnectionType {
+  Association,
+  Generalization,
+  AssociationProfile
+};
 
 type CreatedSemanticEntityData = {
   identifier: string,
@@ -148,6 +191,9 @@ export class ActionsTestSuite {
             _modelOfClassWhichStartedHighlighting: string
           ): void {
             throw new Error("Function not implemented.");
+          },
+          openAlignmentMenu: function (_sourceNode: Node, _canvasPosition: Position): void {
+            throw new Error("Function not implemented.");
           }
         }
 
@@ -185,8 +231,10 @@ export class ActionsTestSuite {
       iri: null,
       color: "",
       group: null,
-      position: {x: 0, y: 0, anchored: true},
-      profileOf: null,
+      position: { x: 0, y: 0, anchored: true },
+      profileOf: [],
+      vocabulary: [],
+      options: {} as any,
       items: []
     };
     return node;
@@ -204,7 +252,11 @@ export class ActionsTestSuite {
       cardinalityTarget: null,
       color: "",
       waypoints: [],
-      profileOf: null
+      profileOf: [],
+      iri: null,
+      vocabulary: [],
+      options: {} as any,
+      mandatoryLevelLabel: null,
     }
     return edge;
   };
@@ -218,11 +270,12 @@ export class ActionsTestSuite {
    *  updates needs to be handled separately in test if necessary (but usually we don't want to update it for the test,
    *  we just need to have it as input for the action)
    */
-  static createClassesContextTypeForTests = (
-    models: Map<string, EntityModel>,
+  static createClassesContextTypeForTests(
     givenClasses: CreatedSemanticEntityData[],
-    givenRelationships: CreatedSemanticEntityData[]
-  ): ClassesContextType => {
+    givenRelationships: CreatedSemanticEntityData[],
+    givenGeneralizations: CreatedSemanticEntityData[],
+    givenRelationshipProfiles: CreatedSemanticEntityData[],
+  ): ClassesContextType {
     const classesAsSemanticEntities: SemanticModelClass[] = [];
     givenClasses.forEach(cclass => {
       classesAsSemanticEntities.push(cclass.model.getEntities()[cclass.identifier] as SemanticModelClass);
@@ -230,19 +283,37 @@ export class ActionsTestSuite {
 
     const relationshipsAsSemanticEntities: SemanticModelRelationship[] = [];
     givenRelationships.forEach(relationship => {
-      relationshipsAsSemanticEntities.push(relationship.model.getEntities()[relationship.identifier] as SemanticModelRelationship);
+      relationshipsAsSemanticEntities.push(
+        relationship.model.getEntities()[relationship.identifier] as SemanticModelRelationship);
     });
+
+    const generalizationsAsSemanticEntities: SemanticModelGeneralization[] = [];
+    givenGeneralizations.forEach(generalization => {
+      generalizationsAsSemanticEntities.push(
+        generalization.model.getEntities()[generalization.identifier] as SemanticModelGeneralization);
+    });
+
+    const relationshipProfilesAsSemanticEntities: SemanticModelRelationshipProfile[] = [];
+    givenRelationshipProfiles.forEach(relationshipProfile => {
+      relationshipProfilesAsSemanticEntities.push(
+        relationshipProfile.model.getEntities()[relationshipProfile.identifier] as SemanticModelRelationshipProfile);
+    });
+
+    const rawEntities = (classesAsSemanticEntities as Entity[])
+      .concat(relationshipsAsSemanticEntities)
+      .concat(generalizationsAsSemanticEntities)
+      .concat(relationshipProfilesAsSemanticEntities);
+
     const classes: ClassesContextType = {
       classes: classesAsSemanticEntities,
       allowedClasses: [],
       setAllowedClasses: function (_) { },
       relationships: relationshipsAsSemanticEntities,
-      generalizations: [],
-      usages: [],
+      generalizations: generalizationsAsSemanticEntities,
       sourceModelOfEntityMap: new Map(),
-      rawEntities: (classesAsSemanticEntities as Entity[]).concat(relationshipsAsSemanticEntities),
+      rawEntities,
       classProfiles: [],
-      relationshipProfiles: []
+      relationshipProfiles: relationshipProfilesAsSemanticEntities
     };
 
     return classes;
@@ -260,7 +331,7 @@ export class ActionsTestSuite {
     identifier?: string
   ): CreatedSemanticEntityData | null {
 
-    const name = {"en": givenName};
+    const name = { "en": givenName };
 
     const operation = createClass({
       iri: ActionsTestSuite.generateIriForName(givenName),
@@ -303,7 +374,10 @@ export class ActionsTestSuite {
    *
    * The {@link classesContext} on output contain the relevant data, but they are not updated based on changes.
    */
-  static prepareModelsWithSemanticData = (visualModelSize: number) => {
+  static prepareModelsWithSemanticData = (
+    visualModelSize: number,
+    connectionToTestType: TestedSemanticConnectionType,
+  ) => {
     const visualModel: WritableVisualModel = createDefaultVisualModelFactory().createNewWritableVisualModelSync();
     const modelAlias = "TEST MODEL";
     const models : Map<string, EntityModel> = new Map();
@@ -318,7 +392,9 @@ export class ActionsTestSuite {
     aggregator.addModel(visualModel);
     const aggregatorView = aggregator.getView();
     aggregatorView.changeActiveVisualModel(visualModel.getIdentifier());
-    const visualModels: Map<string, WritableVisualModel> = new Map(Object.entries({[visualModel.getIdentifier()]: visualModel}));
+    const visualModels: Map<string, WritableVisualModel> = new Map(Object.entries({
+      [visualModel.getIdentifier()]: visualModel
+    }));
 
     const graph: ModelGraphContextType = {
       aggregator,
@@ -398,7 +474,7 @@ export class ActionsTestSuite {
         const createdClass = ActionsTestSuite.createSemanticClassTestVariant(
           models, `${i}-${j}`, modelIdentifiers[i], [], (j + (4*i)).toString());
         if(createdClass === null) {
-          fail("Failed on setup");
+          throw new Error("Failed on setup");
         }
         createdClasses[i].push(createdClass);
       }
@@ -409,39 +485,40 @@ export class ActionsTestSuite {
       case 0:
         break;
       case 1:
-        squareRelationships = ActionsTestSuite.createRelationshipSquare(
-          models, modelIdentifiers[i], createdClasses, i);
+        squareRelationships = ActionsTestSuite.createConnectionSquare(
+          models, modelIdentifiers[i], createdClasses, i, connectionToTestType, null);
         createdRelationships[i].push(...squareRelationships);
         break;
       case 2:
-        squareRelationships = ActionsTestSuite.createRelationshipSquare(
-          models, modelIdentifiers[i], createdClasses, i);
+        squareRelationships = ActionsTestSuite.createConnectionSquare(
+          models, modelIdentifiers[i], createdClasses, i, connectionToTestType, null);
         createdRelationships[i].push(...squareRelationships);
-        createdDiagonalRelationship = ActionsTestSuite.createSemanticRelationshipTestVariant(
-          models, createdClasses[i][0].identifier,
-          createdClasses[i][2].identifier, modelIdentifiers[i], "");
+        createdDiagonalRelationship = ActionsTestSuite.createSemanticConnectionToTest(
+          models, modelIdentifiers[i], connectionToTestType,
+          createdClasses[i][0].identifier, createdClasses[i][2].identifier, null);
         createdRelationships[i].push(createdDiagonalRelationship);
-        createdDiagonalRelationship = ActionsTestSuite.createSemanticRelationshipTestVariant(
-          models, createdClasses[i][1].identifier,
-          createdClasses[i][3].identifier, modelIdentifiers[i], "");
+        createdDiagonalRelationship = ActionsTestSuite.createSemanticConnectionToTest(
+          models, modelIdentifiers[i], connectionToTestType,
+          createdClasses[i][1].identifier, createdClasses[i][3].identifier, null);
         createdRelationships[i].push(createdDiagonalRelationship);
         break;
       default:
-        fail("Failed on setup");
+        throw new Error("Failed on setup");
       }
     }
 
     const classesContext = ActionsTestSuite.createClassesContextTypeForTests(
-      models,
       createdClasses.flat(),
-      createdRelationships.flat()
+      connectionToTestType === TestedSemanticConnectionType.Association ? createdRelationships.flat() : [],
+      connectionToTestType === TestedSemanticConnectionType.Generalization ? createdRelationships.flat() : [],
+      connectionToTestType === TestedSemanticConnectionType.AssociationProfile ? createdRelationships.flat() : [],
     );
 
     return {
       visualModel,
       visualNodeIdentifiers,
       modelAlias,
-      model: firstModel as InMemorySemanticModel,
+      firstModel: firstModel as InMemorySemanticModel,
       models,
       modelsAsArray,
       graph,
@@ -450,19 +527,21 @@ export class ActionsTestSuite {
     };
   }
 
-  static createRelationshipSquare = (
+  static createConnectionSquare = (
     models: Map<string, EntityModel>,
-    dsIdentifier: string,
+    modelDsIdentifier: string,
     createdClasses: CreatedSemanticEntityData[][],
     currentModel: number,
+    connectionToTestType: TestedSemanticConnectionType,
+    profileOf: string[] | null,
   ): CreatedSemanticEntityData[] => {
     const createdRelationships = [];
     for(let i = 0; i < 4; i++) {
-      const created = ActionsTestSuite.createSemanticRelationshipTestVariant(
-        models,
+      const created = ActionsTestSuite.createSemanticConnectionToTest(
+        models, modelDsIdentifier, connectionToTestType,
         createdClasses[currentModel][i].identifier,
         createdClasses[currentModel][(i+1)%4].identifier,
-        dsIdentifier, "");
+        profileOf);
       createdRelationships.push(created);
     }
 
@@ -480,7 +559,7 @@ export class ActionsTestSuite {
       model,
       content: [],
       visualModels: [],
-      position: position !== undefined ? {...position, anchored: null} : { x: 0, y: 0, anchored: null },
+      position: position !== undefined ? { ...position, anchored: null } : { x: 0, y: 0, anchored: null },
     });
 
     return visualId;
@@ -494,7 +573,7 @@ export class ActionsTestSuite {
     representedVisualModel: string,
     position?: XY
   ): string {
-    const nodePosition = position !== undefined ? {...position, anchored: null} : { x: 0, y: 0, anchored: null };
+    const nodePosition = position !== undefined ? { ...position, anchored: null } : { x: 0, y: 0, anchored: null };
     const visualId = addVisualDiagramNode(visualModel, nodePosition, representedVisualModel);
     return visualId;
   }
@@ -504,16 +583,15 @@ export class ActionsTestSuite {
     representedVisualModel: string,
     position?: XY
   ): VisualModelDiagramNode {
-    const nodePosition = position !== undefined ? {...position, anchored: null} : { x: 0, y: 0, anchored: null };
+    const nodePosition = position !== undefined ? { ...position, anchored: null } : { x: 0, y: 0, anchored: null };
 
     const result: VisualModelDiagramNode = {
       identifier,
       externalIdentifier: representedVisualModel,
       label: "",
-      description: null,
       representedModelAlias: "",
       group: null,
-      position: nodePosition
+      position: nodePosition,
     };
     return result;
   }
@@ -525,12 +603,283 @@ export class ActionsTestSuite {
       identifier: visualDiagramNode.identifier,
       externalIdentifier: visualDiagramNode.representedVisualModel,
       label: "",
-      description: "",
       representedModelAlias: "",
       group: null,
-      position: visualDiagramNode.position
+      position: visualDiagramNode.position,
     };
     return result;
+  }
+
+  static mapTestedSemanticConnectionToSemanticCheck = {
+    [TestedSemanticConnectionType.Association]: isSemanticModelRelationship,
+    [TestedSemanticConnectionType.Generalization]: isSemanticModelGeneralization,
+    [TestedSemanticConnectionType.AssociationProfile]: isSemanticModelRelationshipProfile,
+  } as const;
+
+  static createSemanticConnectionToTest(
+    models: Map<string, EntityModel>,
+    modelDsIdentifier: string,
+    relationshipToTestType: TestedSemanticConnectionType,
+    domain: string,
+    range: string,
+    profileOf: string[] | null,
+  ): CreatedSemanticEntityData {
+    let result: CreatedSemanticEntityData ;
+    if(relationshipToTestType === TestedSemanticConnectionType.Generalization) {
+      result = ActionsTestSuite.createSemanticGeneralizationTestVariant(
+        range, domain, null, models, modelDsIdentifier);
+    }
+    else if(relationshipToTestType === TestedSemanticConnectionType.Association) {
+      result = ActionsTestSuite.createSemanticRelationshipTestVariant(
+        models, domain, range, modelDsIdentifier);
+    }
+    else if(relationshipToTestType === TestedSemanticConnectionType.AssociationProfile) {
+      result = ActionsTestSuite.createRelationshipProfileTestVariant(
+        models, modelDsIdentifier, profileOf ?? [], domain, range);
+    }
+    else {
+      throw new Error("Failed in setup when creating relationship");
+    }
+
+    return result;
+  }
+
+  /**
+   * @param identifier if null, then unique identifier is created in the executeOperation
+   */
+  static createSemanticGeneralizationTestVariant(
+    parent: string,
+    child: string,
+    identifier: string | null,
+    models: Map<string, EntityModel>,
+    modelDsIdentifier: string,
+  ): CreatedSemanticEntityData {
+    const generalization: SemanticModelGeneralization | Omit<SemanticModelGeneralization, "id"> = {
+      id: identifier ?? undefined,
+      iri: ActionsTestSuite.generateIriForName(""),
+      type: [SEMANTIC_MODEL_GENERALIZATION],
+      parent,
+      child,
+    };
+
+    const model: InMemorySemanticModel = models.get(modelDsIdentifier) as InMemorySemanticModel;
+    const createGeneralizationOperation = createGeneralization(generalization);
+    const newGeneralization = model.executeOperation(createGeneralizationOperation) as CreatedEntityOperationResult;
+
+    return {
+      identifier: newGeneralization.id,
+      model,
+    };
+  }
+
+  private static createRelationshipProfileTestVariant(
+    models: Map<string, EntityModel>,
+    modelDsIdentifier: string,
+    profileOf: string[],
+    domain: string,
+    range: string,
+  ): CreatedSemanticEntityData {
+    const model: InMemorySemanticModel = models.get(modelDsIdentifier) as InMemorySemanticModel;
+
+    const result = createCmeRelationshipProfile(model, {
+      model: modelDsIdentifier,
+      profileOf,
+      iri: null,
+      name: null,
+      nameSource: null,
+      description: null,
+      descriptionSource: null,
+      usageNote: null,
+      usageNoteSource: null,
+      externalDocumentationUrl: null,
+      mandatoryLevel: null,
+      //
+      domain: domain,
+      domainCardinality: null,
+      range: range,
+      rangeCardinality: null,
+    });
+    return {
+      identifier: result.identifier,
+      model,
+    };
+  }
+
+  static createRelationshipProfileOfEveryRelationshipTestVariant(
+    models: Map<string, EntityModel>,
+    modelDsIdentifier: string,
+    classesContext: ClassesContextType,
+  ) {
+    const createdIdentifiers = [];
+    const model = models.get(modelDsIdentifier) as InMemorySemanticModel;
+    for(const entity of Object.values(model.getEntities())) {
+      if(!isSemanticModelRelationship(entity) && !isSemanticModelRelationshipProfile(entity)) {
+        continue;
+      }
+
+      if(entity.ends[0].concept === null || entity.ends[1].concept === null) {
+        throw new Error("Failed on relationship profile setup")
+      }
+      const result = ActionsTestSuite.createRelationshipProfileTestVariant(
+        models, modelDsIdentifier, [entity.id],
+        entity.ends[0].concept, entity.ends[1].concept);
+      createdIdentifiers.push(result?.identifier);
+    }
+
+    const newRelationshipProfiles = createdIdentifiers.map(identifier =>
+                                     model.getEntities()[identifier] as SemanticModelRelationshipProfile);
+    classesContext.relationshipProfiles = classesContext.relationshipProfiles.concat(newRelationshipProfiles);
+    return {
+      createdIdentifiers,
+      model,
+    };
+  }
+
+  private static createClassProfileTestVariant(
+    models: Map<string, EntityModel>,
+    modelDsIdentifier: string,
+    profileOf: string[],
+  ) {
+    const model = models.get(modelDsIdentifier) as InMemorySemanticModel;
+
+    const result = createCmeClassProfile(model, {
+      model: modelDsIdentifier,
+      profileOf,
+      iri: null,
+      name: null,
+      nameSource: null,
+      description: null,
+      descriptionSource: null,
+      usageNote: null,
+      usageNoteSource: null,
+      externalDocumentationUrl: null,
+      role: null
+    });
+    return {
+      identifier: result.identifier,
+      model,
+    };
+  }
+
+  static createClassProfileOfEveryClassTestVariant(
+    models: Map<string, EntityModel>,
+    modelDsIdentifier: string,
+    classesContext: ClassesContextType,
+  ) {
+    const createdIdentifiers: {
+      profiledClass: string,
+      classProfile: string
+    }[] = [];
+    const model = models.get(modelDsIdentifier) as InMemorySemanticModel;
+    for(const entity of Object.values(model.getEntities())) {
+      if(!isSemanticModelClass(entity) && !isSemanticModelClassProfile(entity)) {
+        continue;
+      }
+
+      const result = ActionsTestSuite.createClassProfileTestVariant(models, modelDsIdentifier, [entity.id]);
+      createdIdentifiers.push({
+        classProfile: result?.identifier,
+        profiledClass: entity.id
+      });
+    }
+
+    const newClassProfiles = createdIdentifiers
+      .map(created => model.getEntities()[created.classProfile] as SemanticModelClassProfile);
+    classesContext.classProfiles = classesContext.classProfiles.concat(newClassProfiles);
+    return {
+      createdIdentifiers,
+      model,
+    };
+  }
+
+  /**
+   * Creates semantic attribute, adds it to the model and extends the classes context
+   */
+  static createSemanticAttributeTestVariant(
+    classesContext: ClassesContextType,
+    models: Map<string, EntityModel>,
+    domainConceptIdentifier: string,
+    ModelDsIdentifier: string,
+    attributeName: string,
+  ) {
+
+    const range = representRdfsLiteral();
+    const name = { "en": attributeName };
+    const operation = createRelationship({
+      ends: [{
+        iri: null,
+        name: {},
+        description: {},
+        concept: domainConceptIdentifier,
+        cardinality: [0, 1],
+      }, {
+        name,
+        description: {},
+        concept: range.identifier,
+        cardinality: [0, 1],
+        iri: ActionsTestSuite.generateIriForName(name["en"]),
+      }]
+    });
+
+    const model: InMemorySemanticModel = models.get(ModelDsIdentifier) as InMemorySemanticModel;
+    const newAttribute = model.executeOperation(operation) as CreatedEntityOperationResult;
+    if (newAttribute.success === false || newAttribute.id === undefined) {
+      throw new Error("Failed in attribute creation");
+    }
+
+    const attributeObject = model.getEntities()[newAttribute.id];
+    if (!isSemanticModelAttribute(attributeObject)) {
+      throw new Error("Failed when creating attribute");
+    }
+    classesContext.relationships.push(attributeObject);
+    classesContext.rawEntities.push(attributeObject);
+
+    return {
+      identifier: newAttribute.id,
+      model,
+    };
+  }
+
+  static createSemanticAttributeProfileTestVariant(
+    classesContext: ClassesContextType,
+    models: Map<string, EntityModel>,
+    domainAttribute: string,
+    domainConceptIdentifier: string,
+    modelDsIdentifier: string,
+  ) {
+    const range = representRdfsLiteral();
+
+    const model: InMemorySemanticModel = models.get(modelDsIdentifier) as InMemorySemanticModel;
+    const executor = createCmeModelOperationExecutor(models);
+    const result = executor.createRelationshipProfile({
+      model: modelDsIdentifier,
+      profileOf: [domainAttribute],
+      iri: ActionsTestSuite.generateIriForName(domainAttribute),
+      name: null,
+      nameSource: null,
+      description: null,
+      descriptionSource: null,
+      usageNote: null,
+      usageNoteSource: null,
+      //
+      domain: domainConceptIdentifier,
+      domainCardinality: null,
+      range: range.identifier,
+      rangeCardinality: null,
+      externalDocumentationUrl: null,
+      mandatoryLevel: null,
+    });
+
+    const createdAttributeProfile = model.getEntities()[result.identifier];
+    if(!isSemanticModelRelationshipProfile(createdAttributeProfile)) {
+      throw new Error("Failed on set-up when creating semantic attribute profile")
+    }
+    classesContext.relationshipProfiles.push(createdAttributeProfile);
+
+    return {
+      identifier: result.identifier,
+      model,
+    };
   }
 
   static createSemanticRelationshipTestVariant(
@@ -538,9 +887,8 @@ export class ActionsTestSuite {
     domainConceptIdentifier: string,
     rangeConceptIdentifier: string,
     modelDsIdentifier: string,
-    relationshipName: string,
   ): CreatedSemanticEntityData {
-    const name = {"en": relationshipName};
+    const name = { "en": "" };
 
     const operation = createRelationship({
       id: `${domainConceptIdentifier}-${rangeConceptIdentifier}`,
@@ -580,6 +928,32 @@ export class ActionsTestSuite {
     };
   }
 
+  static createNewVisualNodeOfClassProfileForTesting(
+    visualModel: WritableVisualModel,
+    model: string,
+    representedEntity: string,
+    profiledClassVisualId: string,
+    position?: XY
+  ) {
+    const profileVisualId = visualModel.addVisualNode({
+      representedEntity: representedEntity,
+      model,
+      content: [],
+      visualModels: [],
+      position: position !== undefined ? { ...position, anchored: null } : { x: 0, y: 0, anchored: null },
+    });
+
+    visualModel.addVisualProfileRelationship({
+      model: "",
+      waypoints: [],
+      visualSource: profileVisualId,
+      visualTarget: profiledClassVisualId,
+      entity: ""
+    })
+
+    return profileVisualId;
+  }
+
   private static currentRepresentedRelationshipIdentifier = 0;
   static createNewVisualRelationshipsForTestingFromSemanticEnds(
     visualModel: WritableVisualModel,
@@ -594,7 +968,7 @@ export class ActionsTestSuite {
       visualTarget === undefined ||
       !isVisualNode(visualSource) ||
       !isVisualNode(visualTarget)) {
-      fail("Failed when creating visual relationship for testing - programmer error");
+      throw new Error("Failed when creating visual relationship for testing - programmer error");
     }
     const visualId = visualModel.addVisualRelationship({
       model: model,
@@ -611,9 +985,98 @@ export class ActionsTestSuite {
     return visualId;
   }
 
+  static addTestRelationshipToVisualModel(
+    graph: ModelGraphContextType,
+    visualModel: WritableVisualModel,
+    modelDsIdentifier: string,
+    relationshipToTestType: TestedSemanticConnectionType,
+    relationshipIdentifier: string,
+    visualSources: string[] | null,
+    visualTargets: string[] | null,
+  ) {
+    if (visualSources === null || visualTargets === null) {
+      if(relationshipToTestType === TestedSemanticConnectionType.Generalization) {
+        addSemanticGeneralizationToVisualModelAction(
+          notificationMockup, graph, visualModel,
+          relationshipIdentifier, modelDsIdentifier);
+      }
+      else if(relationshipToTestType === TestedSemanticConnectionType.Association) {
+        addSemanticRelationshipToVisualModelAction(
+          notificationMockup, graph, visualModel,
+          relationshipIdentifier, modelDsIdentifier);
+      }
+      else if(relationshipToTestType === TestedSemanticConnectionType.AssociationProfile) {
+        addSemanticRelationshipProfileToVisualModelAction(
+          notificationMockup, graph, visualModel,
+          relationshipIdentifier, modelDsIdentifier);
+      }
+
+      return;
+    }
+
+    const visualSourcesAsEntities = visualSources
+      .map(visualSource => visualModel.getVisualEntity(visualSource))
+      .filter(entity => entity !== null);
+
+    const visualTargetsAsEntities = visualTargets
+      .map(visualTarget => visualModel.getVisualEntity(visualTarget))
+      .filter(entity => entity !== null);
+
+    addVisualRelationshipsWithSpecifiedVisualEnds(
+      visualModel, modelDsIdentifier, relationshipIdentifier,
+      visualSourcesAsEntities, visualTargetsAsEntities);
+  }
+
+  static fillVisualModelWithData(
+    modelToFillWith: EntityModel,
+    visualmodelToFill: WritableVisualModel,
+    relationshipToTestType: TestedSemanticConnectionType,
+  ) {
+    const nodes: string[] = [];
+    const edges: string[] = [];
+    // First add all nodes
+    for(const entity of Object.values(modelToFillWith.getEntities())) {
+      if(isSemanticModelClass(entity)) {
+        const id = ActionsTestSuite.createNewVisualNodeForTesting(
+          visualmodelToFill, modelToFillWith.getId(), entity.id);
+        nodes.push(id);
+      }
+    }
+
+    // Now add all edges since the ends already exist in visual model
+    for(const entity of Object.values(modelToFillWith.getEntities())) {
+      if(ActionsTestSuite.mapTestedSemanticConnectionToSemanticCheck[relationshipToTestType](entity)) {
+        const ends = [];
+        if(relationshipToTestType === TestedSemanticConnectionType.Generalization) {
+          ends.push((entity as SemanticModelGeneralization).child);
+          ends.push((entity as SemanticModelGeneralization).parent);
+        }
+        else {
+          ends.push((entity as SemanticModelRelationship | SemanticModelRelationshipProfile).ends[0].concept);
+          ends.push((entity as SemanticModelRelationship | SemanticModelRelationshipProfile).ends[1].concept);
+        }
+        if(ends[0] === null || ends[1] === null) {
+          throw new Error("Failed on test setup");
+        }
+        const id = ActionsTestSuite.createNewVisualRelationshipsForTestingFromSemanticEnds(
+          visualmodelToFill, modelToFillWith.getId(),
+          ends[0],
+          ends[1],
+          entity.id
+        );
+
+        edges.push(id);
+      }
+    }
+
+    return {
+      nodes,
+      edges
+    };
+  }
+
 }
 
-// TODO RadStr: Put into class - and rewrite it as function which returns the notification object.
 export const notificationMockup: UseNotificationServiceWriterType = {
   success: () => { },
   error: () => { },

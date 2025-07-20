@@ -100,7 +100,8 @@ export function getArtifactsView(
     const artifacts = context.specification.artefacts.filter(a => artifactIds.includes(a.iri)).map(artifact => ({
         ...artifact,
         relativePath: pathRelative(baseUrl, artifact.publicUrl),
-        title: artefactTitle[artifact.generator]?.["cs"] ?? "",
+        relativePathAsText: pathRelative(baseUrl, artifact.publicUrl) || "#",
+        title: artefactTitle[artifact.generator] ?? {},
         getArtifact: adapter.async(async () => {
             const stream = new MemoryStreamDictionary();
             const generator = await context.context.createGenerator(artifact.generator);

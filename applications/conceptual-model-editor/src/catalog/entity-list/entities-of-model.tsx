@@ -11,13 +11,6 @@ import {
   isSemanticModelGeneralization,
   isSemanticModelRelationship,
 } from "@dataspecer/core-v2/semantic-model/concepts";
-import {
-  type SemanticModelClassUsage,
-  type SemanticModelRelationshipUsage,
-  isSemanticModelAttributeUsage,
-  isSemanticModelClassUsage,
-  isSemanticModelRelationshipUsage,
-} from "@dataspecer/core-v2/semantic-model/usage/concepts";
 
 import { useClassesContext } from "../../context/classes-context";
 import { useModelGraphContext } from "../../context/model-context";
@@ -27,21 +20,25 @@ import { shortenStringTo } from "../../util/utils";
 import { ActionsContextType, useActions } from "../../action/actions-react-binding";
 import { ExpandModelButton } from "../components/expand-model";
 import { type VisualEntity, VisualNode, isVisualNode, isVisualRelationship } from "@dataspecer/core-v2/visual-model";
-import { isSemanticModelClassProfile, isSemanticModelRelationshipProfile, SemanticModelClassProfile, SemanticModelRelationshipProfile } from "@dataspecer/core-v2/semantic-model/profile/concepts";
+import {
+  isSemanticModelClassProfile,
+  isSemanticModelRelationshipProfile,
+  SemanticModelClassProfile,
+  SemanticModelRelationshipProfile,
+} from "@dataspecer/core-v2/semantic-model/profile/concepts";
 import { getDomainAndRange } from "../../util/relationship-utils";
 import { getRemovedAndAdded } from "../../action/utilities";
 import { isSemanticModelAttributeProfile } from "../../dataspecer/semantic-model";
 
 export enum EntityType {
-    Class = "class",
-    Relationship = "relationship",
-    Attribute = "attribute",
-    Profile = "profile",
+  Class = "class",
+  Relationship = "relationship",
+  Attribute = "attribute",
+  Profile = "profile",
 }
 
 type EntityTypes = SemanticModelClass | SemanticModelRelationship |
-   SemanticModelClassUsage | SemanticModelRelationshipUsage |
-   SemanticModelClassProfile | SemanticModelRelationshipProfile;
+  SemanticModelClassProfile | SemanticModelRelationshipProfile;
 
 const DEFAULT_MODEL_COLOR = "#000069";
 
@@ -68,18 +65,16 @@ const getEntitiesByType = (entityType: EntityType, model: EntityModel): EntityTy
 
 const isUsageOrProfile = (
   what: Entity | null
-): what is SemanticModelClassUsage | SemanticModelRelationshipUsage
-| SemanticModelClassProfile | SemanticModelRelationshipProfile => {
-  return isSemanticModelClassUsage(what) || isSemanticModelRelationshipUsage(what)
-   || isSemanticModelClassProfile(what) || isSemanticModelRelationshipProfile(what);
+): what is SemanticModelClassProfile | SemanticModelRelationshipProfile => {
+  return isSemanticModelClassProfile(what) || isSemanticModelRelationshipProfile(what);
 };
 
 /**
  * Render list of entities of given type for given model.
  */
 export const EntitiesOfModel = (props: {
-    model: EntityModel;
-    entityType: EntityType;
+  model: EntityModel;
+  entityType: EntityType;
 }) => {
   const { model, entityType } = props;
   //
@@ -111,7 +106,7 @@ export const EntitiesOfModel = (props: {
       const represented = getRepresented(entity);
       if (represented !== null) {
         nextVisible.push(represented);
-        if(isVisualNode(entity)) {
+        if (isVisualNode(entity)) {
           entity.content.forEach(attribute => {
             nextVisible.push(attribute);
           });
@@ -137,7 +132,7 @@ export const EntitiesOfModel = (props: {
             if (represented !== null) {
               setVisible(prev => {
                 const newVisible = [...prev, represented];
-                if(isVisualNode(next)) {
+                if (isVisualNode(next)) {
                   newVisible.push(...next.content);
                 }
                 return newVisible;
@@ -159,14 +154,14 @@ export const EntitiesOfModel = (props: {
                 ...prev.slice(0, index),
                 ...prev.slice(index + 1, prev.length),
               ];
-              if(isVisualNode(previous)) {
+              if (isVisualNode(previous)) {
                 newVisible = newVisible.filter(visibleElement => !previous.content.includes(visibleElement));
               }
               return newVisible;
             });
           } else if (previous !== null && next !== null) {
             // Update
-            if(isVisualNode(next)) {
+            if (isVisualNode(next)) {
               const { removed: removedAtrtibutes, added: addedAttributes } =
                 getRemovedAndAdded((previous as VisualNode).content, next.content);
               setVisible(prev => {
@@ -219,26 +214,15 @@ export const EntitiesOfModel = (props: {
     } else if (isSemanticModelAttributeProfile(entity)) {
       const domain = getDomainAndRange(entity).domain?.concept;
       actions.addAttributeToVisualModel(entity.id, domain ?? null);
-    } else if (isSemanticModelAttributeUsage(entity)) {
-      const domain = getDomainAndRange(entity).domain?.concept;
-      actions.addAttributeToVisualModel(entity.id, domain ?? null);
-    } else if (isSemanticModelClassUsage(entity)
-      || isSemanticModelClassProfile(entity)) {
-      actions.addClassProfileToVisualModel(model.getId(), entity.id, null);
     } else if (isSemanticModelRelationship(entity)) {
       actions.addRelationToVisualModel(model.getId(), entity.id);
-    } else if (isSemanticModelRelationshipUsage(entity)
-      || isSemanticModelRelationshipProfile(entity)) {
-      actions.addRelationProfileToVisualModel(model.getId(), entity.id);
     } else if (isSemanticModelGeneralization(entity)) {
       actions.addGeneralizationToVisualModel(model.getId(), entity.id);
     }
   };
 
   const handleDeleteFromView = (entity: Entity) => {
-    if(isSemanticModelAttribute(entity) ||
-       isSemanticModelAttributeUsage(entity) ||
-       isSemanticModelAttributeProfile(entity)) {
+    if (isSemanticModelAttribute(entity) || isSemanticModelAttributeProfile(entity)) {
       actions.removeAttributesFromVisualModel([entity.id]);
     }
     else {
@@ -247,7 +231,7 @@ export const EntitiesOfModel = (props: {
   };
 
   const handleDeleteEntity = async (model: InMemorySemanticModel | ExternalSemanticModel, identifier: string) => {
-    await actions.deleteFromSemanticModels([{identifier, sourceModel: model.getId()}]);
+    await actions.deleteFromSemanticModels([{ identifier, sourceModel: model.getId() }]);
   };
 
   const handleSetViewportToEntity = (identifier: string, entityNumberToBeCentered: number) => {
@@ -260,7 +244,7 @@ export const EntitiesOfModel = (props: {
     <li style={{ backgroundColor: color }}>
       <div className="flex flex-row justify-between">
         <h4>
-                    Ⓜ {displayName}
+          Ⓜ {displayName}
         </h4>
         <div className="flex flex-row">
           {renderAddButton(actions, entityType, model)}
@@ -348,7 +332,7 @@ function renderAddButton(actions: ActionsContextType, type: EntityType, model: E
 
   return (
     <div className="flex flex-row justify-between whitespace-nowrap pb-1 pt-0.5">
-            &nbsp;
+      &nbsp;
       <button className="ml-2 px-1" onClick={onAdd}>➕</button>
     </div>
   )

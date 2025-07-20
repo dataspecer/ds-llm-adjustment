@@ -21,6 +21,18 @@ function normalizeLabel(label: string) {
   return label.replace(/ /g, "-");
 }
 
+function getLabel(entity: Entity, language: string): string {
+  let langString = {} as LanguageString;
+  if (isSemanticModelClass(entity) || isSemanticModelClassProfile(entity)) {
+    langString = entity.name;
+  }
+  if (isSemanticModelRelationship(entity) || isSemanticModelRelationshipProfile(entity)) {
+    langString = entity.ends[1].name;
+  }
+  const {translation} = getTranslation(langString, [language]);
+  return translation;
+}
+
 function getLastChunkFromIri(iri: string | null | undefined): string | null {
   if (!iri) {
     return null;
@@ -61,6 +73,13 @@ const PREFIX_MAP: Record<string, string> = {
   "http://www.w3.org/2006/time#": "time",
   "http://www.w3.org/2006/vcard/ns#": "vcard",
   "http://www.w3.org/2001/XMLSchema#": "xsd",
+  "http://www.w3.org/ns/dx/prof/": "prof",
+  "https://w3id.org/dsv-dap#": "dsv-dap",
+  "https://w3id.org/dsv#": "dsv",
+  "http://data.europa.eu/r5r/": "dcatap",
+  "https://mff-uk.github.io/specifications/dcat-ap#": "dcat-ap",
+  "https://mff-uk.github.io/specifications/dcat-dap#": "dcat-dap",
+  "https://ofn.gov.cz/dcat-ap-cz#": "dcat-ap-cz"
 };
 
 export type DocumentationGeneratorInputModel = {
@@ -88,7 +107,7 @@ export async function generateDocumentation(
   const models = structuredClone(inputModel.models);
 
   // Primary semantic model
-  const semanticModel = {} as Entities
+  const semanticModel = {} as Record<string, Entity & {aggregation?: Entity, aggregationParents?: Entity[]}>;
   for (const model of models) {
     if (model.isPrimary) {
       Object.assign(semanticModel, model.entities);
@@ -114,9 +133,15 @@ export async function generateDocumentation(
     }
   }
 
+  const sortedSemanticModel = Object.values(semanticModel).sort((a, b) => {
+    const aLang = getLabel(a.aggregation, configuration.language);
+    const bLang = getLabel(b.aggregation, configuration.language);
+    return aLang.localeCompare(bLang);
+  });
+
   // Add all relationships to each entity
   // We know, that each relationship profile MUST have its concept present in the model so we do not need to enumerate rest
-  for (const entity of Object.values(semanticModel)) {
+  for (const entity of sortedSemanticModel) {
     if (isSemanticModelRelationshipProfile(entity)) {
       {
         const conceptId = entity.ends[0]?.concept;
@@ -141,12 +166,25 @@ export async function generateDocumentation(
     }
   }
 
+  const locallyDefinedSemanticEntityByTags = Object.groupBy(sortedSemanticModel, entity => (entity as SemanticModelClassProfile)?.tags?.[0] || "default");
+
   const handlebarsAdapter = createHandlebarsAdapter();
 
   const data = {
     ...(addData?.(handlebarsAdapter)),
     label: inputModel.label,
-    locallyDefinedSemanticEntity: semanticModel,
+    locallyDefinedSemanticEntity: sortedSemanticModel,
+    locallyDefinedSemanticEntityByTags,
+
+    semanticEntitiesByType: {
+      classes: sortedSemanticModel.filter(entity => isSemanticModelClass(entity)),
+      classProfiles: sortedSemanticModel.filter(entity => isSemanticModelClassProfile(entity)),
+      relationships: sortedSemanticModel.filter(entity => isSemanticModelRelationship(entity)),
+      relationshipProfiles: sortedSemanticModel.filter(entity => isSemanticModelRelationshipProfile(entity)),
+    },
+
+    classProfilesByTags: Object.groupBy(sortedSemanticModel.filter(entity => isSemanticModelClassProfile(entity)), entity => (entity as SemanticModelClassProfile)?.tags?.[0] || "default"),
+
     dsv: inputModel.dsv,
 
     // The goal of the given documentation
@@ -199,6 +237,19 @@ export async function generateDocumentation(
   };
 
   data['semanticEntity'] =  function(input: string, options: Handlebars.HelperOptions) {
+    // todo #1261
+    if (input === "https://ofn.gov.cz/zdroj/základní-datové-typy/2020-07-01/text") {
+      const text = {
+        id: "https://ofn.gov.cz/základní-datové-typy/2020-07-01/#text",
+        iri: "https://ofn.gov.cz/základní-datové-typy/2020-07-01/#text",
+        name: {
+          [configuration.language]: "Text",
+        },
+      } as any;
+      text.aggregation = text;
+      return options.fn(text);
+    }
+
     let entity: SemanticModelEntity | null = null;
     for (const model of models) {
       if (Object.hasOwn(model.entities, input)) {
@@ -215,7 +266,37 @@ export async function generateDocumentation(
     return entity ? options.fn(entity) : options.inverse(input);
   };
 
+  function getExternalDocumentationUrl(entity: SemanticModelEntity): string | null {
+    if (isSemanticModelClass(entity) || isSemanticModelClassProfile(entity)) {
+      return entity.externalDocumentationUrl || null;
+    }
+
+    if (isSemanticModelRelationship(entity) || isSemanticModelRelationshipProfile(entity)) {
+      const end = entity.ends.find(end => end.externalDocumentationUrl);
+      return end ? end.externalDocumentationUrl : null;
+    }
+
+    return null;
+  }
+
+  function getHashPart(url: string | null): string | null {
+    if (!url) {
+      return null;
+    }
+    const hashIndex = url.indexOf("#");
+    if (hashIndex === -1) {
+      return null;
+    }
+    return url.substring(hashIndex + 1) || null;
+  }
+
   function getAnchorForLocalEntity(entity: SemanticModelEntity): string | null {
+    const externalDocumentationUrl = getExternalDocumentationUrl(entity);
+    const hashPart = getHashPart(externalDocumentationUrl);
+    if (hashPart) {
+      return hashPart;
+    }
+
     if (isSemanticModelRelationship(entity) || isSemanticModelRelationshipProfile(entity)) {
       // @ts-ignore
       const {ok, translation} = getTranslation(entity.aggregation.ends[1].name, [configuration.language]);
@@ -237,46 +318,55 @@ export async function generateDocumentation(
   }
 
   /**
-   * Generates link for the given entity.
+   * Generates link for the given entity by entity ID, not IRI.
+   * @todo Split to class-like and relationship-like links.
    */
-  data['href'] =  function(input: string, options: Handlebars.HelperOptions) {
-    // todo: handle external links
+  data['href'] =  function(entityId: string, options: Handlebars.HelperOptions) {
+    // todo #1261
+    if (entityId === "https://ofn.gov.cz/zdroj/základní-datové-typy/2020-07-01/text") {
+      return "https://ofn.gov.cz/základní-datové-typy/2020-07-01/#text";
+    }
 
     let inModel: ModelDescription | null = null;
     for (const model of models) {
-      if (Object.hasOwn(model.entities, input)) {
+      if (Object.hasOwn(model.entities, entityId)) {
         inModel = model;
         break;
       }
       // Hotfix because AP usage links to IRI not to ID
       // todo inspect
-      const entity = Object.values(model.entities).find(entity => entity.iri === input ||
-        ((isSemanticModelRelationship(entity) || isSemanticModelRelationshipProfile(entity)) && entity.ends.some(end => end.iri === input))
+      const entity = Object.values(model.entities).find(entity => entity.iri === entityId ||
+        ((isSemanticModelRelationship(entity) || isSemanticModelRelationshipProfile(entity)) && entity.ends.some(end => end.iri === entityId))
       );
       if (entity) {
         inModel = model;
-        input = entity.id;
+        entityId = entity.id;
         break;
       }
     }
-    const entity = inModel?.entities[input];
+    const entity = inModel?.entities[entityId];
 
     if (inModel && entity) {
       if (inModel.isPrimary) {
-        const anchor = getAnchorForLocalEntity(entity);
-        return "#" + anchor;
+        return "#" + getAnchorForLocalEntity(entity);
       } else {
+        let externalDocumentationUrl = getExternalDocumentationUrl(entity);
+        const isRelative = externalDocumentationUrl?.startsWith("#");
+
+        if (externalDocumentationUrl && !isRelative) {
+          return externalDocumentationUrl;
+        }
         if (inModel.documentationUrl) {
           const anchor = getAnchorForLocalEntity(entity);
           return inModel.documentationUrl + "#" + anchor;
         } else {
-          return input;
+          return entityId;
         }
       }
     }
 
-    // Last option
-    return input;
+    // Last option, use internal ID with hope that it is actually IRI.
+    return entityId;
   };
 
   /**

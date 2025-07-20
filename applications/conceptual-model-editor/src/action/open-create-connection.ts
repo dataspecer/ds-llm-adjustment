@@ -8,11 +8,21 @@ import { ModelGraphContextType } from "../context/model-context";
 import { UseNotificationServiceWriterType } from "../notification/notification-service-context";
 import { DialogApiContextType } from "../dialog/dialog-service";
 import { Options } from "../configuration/options";
-import { ConnectionType, CreateConnectionState, createConnectionDialog } from "../dialog/obsolete/create-connection-dialog";
+import {
+  ConnectionType,
+  CreateConnectionState,
+  createConnectionDialog,
+} from "../dialog/obsolete/create-connection-dialog";
 import { InvalidState, UnsupportedOperationException } from "../application/error";
 import { createLogger } from "../application";
-import { isSemanticModelClassProfile, SemanticModelClassProfile } from "@dataspecer/core-v2/semantic-model/profile/concepts";
-import { createVisualModelOperationExecutor, VisualModelOperationExecutor } from "../dataspecer/visual-model/visual-model-operation-executor";
+import {
+  isSemanticModelClassProfile,
+  SemanticModelClassProfile,
+} from "@dataspecer/core-v2/semantic-model/profile/concepts";
+import {
+  createVisualModelOperationExecutor,
+  VisualModelOperationExecutor,
+} from "../dataspecer/visual-model/visual-model-operation-executor";
 import { findSourceModelOfEntity } from "../service/model-service";
 import { withErrorBoundary } from "./utilities/error-utilities";
 import { CmeModelOperationExecutor } from "../dataspecer/cme-model/cme-model-operation-executor";
@@ -93,7 +103,7 @@ function openCreateConnectionDialogActionInternal(
 
     const generalization = cmeExecutor.createGeneralization({
       model: sourceModel.getId(),
-      // https://github.com/mff-uk/dataspecer/issues/537
+      // https://github.com/dataspecer/dataspecer/issues/537
       iri: null,
       childIdentifier: source.id,
       parentIdentifier: target.id,
@@ -186,7 +196,7 @@ function createGeneralization(
 ) {
   const generalization = cmeExecutor.createGeneralization({
     model: state.model.getId(),
-    // https://github.com/mff-uk/dataspecer/issues/537
+    // https://github.com/dataspecer/dataspecer/issues/537
     iri: null,
     childIdentifier: state.source.id,
     parentIdentifier: state.target.id,

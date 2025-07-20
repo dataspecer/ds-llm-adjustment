@@ -1,11 +1,10 @@
 import {
+  SemanticModelGeneralization,
   type SemanticModelRelationship,
+  isSemanticModelGeneralization,
   isSemanticModelRelationship,
 } from "@dataspecer/core-v2/semantic-model/concepts";
 import { SemanticModelRelationshipProfile } from "@dataspecer/core-v2/semantic-model/profile/concepts";
-import {
-  type SemanticModelRelationshipUsage,
-} from "@dataspecer/core-v2/semantic-model/usage/concepts";
 
 export type DomainAndRange<EndType> = {
     domain: EndType | null,
@@ -73,7 +72,6 @@ export type DomainAndRangeConcepts = {
  */
 export const getDomainAndRangeConcepts = (
   relationship: SemanticModelRelationship
-  | SemanticModelRelationshipUsage
   | SemanticModelRelationshipProfile,
 ): DomainAndRangeConcepts => {
   if (isSemanticModelRelationship(relationship)) {
@@ -92,6 +90,35 @@ export const getDomainAndRangeConcepts = (
 };
 
 /**
+ * Extension of {@link getDomainAndRangeConcepts}.
+ *  This method also returns domain and range for {@link SemanticModelGeneralization}.
+ *  To emphasize that generalization doesn't have domain and range in the literal sense
+ *  we return source and target.
+ */
+export const getSemanticConnectionEndConcepts = (
+  relationship: SemanticModelRelationship
+  | SemanticModelRelationshipProfile
+  | SemanticModelGeneralization,
+): { source: string | null, target: string | null } => {
+  let source: string | null;
+  let target: string | null;
+  if(isSemanticModelGeneralization(relationship)) {
+    source = relationship.child;
+    target = relationship.parent;
+  }
+  else {
+    const domainAndRange = getDomainAndRangeConcepts(relationship);
+    source = domainAndRange.domain;
+    target = domainAndRange.range;
+  }
+
+  return {
+    source,
+    target,
+  };
+};
+
+/**
  * For given cardinality return human readable representation.
  */
 export const cardinalityToHumanLabel = (cardinality: [number, number | null] | undefined | null): string | null => {
@@ -106,7 +133,7 @@ export const cardinalityToHumanLabel = (cardinality: [number, number | null] | u
  * @param entity
  * @returns `truthy` if both ends of `entity` have an `iri`, `false` otherwise
  */
-export const bothEndsHaveAnIri = (entity: SemanticModelRelationship | SemanticModelRelationshipUsage) => {
+export const bothEndsHaveAnIri = (entity: SemanticModelRelationship) => {
   if (isSemanticModelRelationship(entity)) {
     const [first, second] = entity.ends;
     return first?.iri && first.iri.length > 0 && second?.iri && second.iri.length > 0;
@@ -114,4 +141,3 @@ export const bothEndsHaveAnIri = (entity: SemanticModelRelationship | SemanticMo
     return false;
   }
 };
-

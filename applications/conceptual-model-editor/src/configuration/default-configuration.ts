@@ -5,6 +5,21 @@ const PREFIXES = {
   "http://www.w3.org/2001/XMLSchema#": "xml",
   "http://www.w3.org/1999/02/22-rdf-syntax-ns#": "rdf",
   "http://www.w3.org/2000/01/rdf-schema#": "rdfs",
+  "http://www.w3.org/ns/adms#": "adms",
+  "http://www.w3.org/ns/dcat#": "dcat",
+  "http://data.europa.eu/r5r/": "dcatap",
+  "http://purl.org/dc/terms/": "dcterms",
+  "http://xmlns.com/foaf/0.1/": "foaf",
+  "http://www.w3.org/2002/07/owl#": "owl",
+  "http://www.w3.org/ns/dx/prof/": "prof",
+  "https://w3id.org/dsv-dap#": "dsv-dap",
+  "https://w3id.org/dsv#": "dsv",
+  "http://www.w3.org/2004/02/skos/core#": "skos",
+  "https://mff-uk.github.io/specifications/dcat-dap/#": "dcat-dap",
+  "https://mff-uk.github.io/specifications/dcat-ap/#": "dcat-ap",
+  "https://ofn.gov.cz/dcat-ap-cz#": "dcat-ap-cz",
+  "https://ofn.gov.cz/dcat-ap-cz-360-2023#": "dcat-ap-cz-360-2023",
+  "https://slovník.gov.cz/veřejný-sektor/pojem/": "V-SGoV",
 };
 
 /**

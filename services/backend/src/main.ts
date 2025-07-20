@@ -4,16 +4,13 @@ import express from "express";
 import multer from "multer";
 import configuration from "./configuration.ts";
 import { Migrate } from "./migrations/migrate.ts";
-import { DataSpecificationModelAdapted } from "./models/data-specification-model-adapted.ts";
 import { LocalStoreModel } from "./models/local-store-model.ts";
 import { ResourceModel } from "./models/resource-model.ts";
 import { getDefaultConfiguration } from "./routes/configuration.ts";
-import { createDataPsm, deleteDataPsm } from "./routes/dataPsm.ts";
-import { getlightweightFromSimplified as getlightweightOwlFromSimplified } from "./routes/experimental.ts";
-import { getSingleFile, getZip, getJsonSchema } from "./routes/generate.ts";
+import { getLightweightOwlFromSimplified } from "./routes/experimental.ts";
+import { getSingleFile, getZip } from "./routes/generate.ts";
 import { exportPackageResource, importPackageResource } from "./routes/export-import-raw.ts";
 import { getGenerateApplicationByModelId, getGeneratedApplication } from "./routes/genapp.ts";
-import { generate } from "./routes/generate.ts";
 import { importResource } from "./routes/import.ts";
 import {
   copyRecursively,
@@ -29,16 +26,6 @@ import {
   updateResource,
 } from "./routes/resource.ts";
 import { getSimplifiedSemanticModel, setSimplifiedSemanticModel } from "./routes/simplified-semantic-model.ts";
-import {
-  addSpecification,
-  cloneSpecification,
-  consistencyFix,
-  deleteSpecification,
-  garbageCollection,
-  importSpecifications,
-  listSpecifications,
-  modifySpecification,
-} from "./routes/specification.ts";
 import { getSystemData } from "./routes/system.ts";
 import { useStaticSpaHandler } from "./static.ts";
 import { migratePR419 } from "./tools/migrate-pr419.ts";
@@ -48,7 +35,6 @@ import { migratePR419 } from "./tools/migrate-pr419.ts";
 export const storeModel = new LocalStoreModel("./database/stores");
 export const prismaClient = new PrismaClient();
 export const resourceModel = new ResourceModel(storeModel, prismaClient);
-export const dataSpecificationModel = new DataSpecificationModelAdapted(storeModel, "https://ofn.gov.cz/data-specification/{}", resourceModel);
 const migration = new Migrate(prismaClient);
 
 let fullUrl: string;
@@ -82,19 +68,6 @@ application.use(cors());
 application.use(express.json({ limit: configuration.payloadSizeLimit }));
 application.use(express.urlencoded({ extended: false, limit: configuration.payloadSizeLimit }));
 application.use(express.urlencoded({ extended: true, limit: configuration.payloadSizeLimit }));
-
-application.get(apiBasename + "/data-specification", listSpecifications);
-application.post(apiBasename + "/data-specification", addSpecification);
-application.post(apiBasename + "/data-specification/clone", cloneSpecification);
-application.delete(apiBasename + "/data-specification", deleteSpecification);
-application.put(apiBasename + "/data-specification", modifySpecification);
-application.post(apiBasename + "/data-specification/garbage-collection", garbageCollection);
-application.post(apiBasename + "/data-specification/consistency-fix", consistencyFix);
-
-application.post(apiBasename + "/data-specification/data-psm", createDataPsm);
-application.delete(apiBasename + "/data-specification/data-psm", deleteDataPsm);
-
-application.post(apiBasename + "/import", importSpecifications);
 
 // Api for packages (core-v2)
 
@@ -144,13 +117,12 @@ application.put(apiBasename + "/simplified-semantic-model", setSimplifiedSemanti
 
 // Experimental features
 
-application.post(apiBasename + "/experimental/lightweight-owl-from-simplified.ttl", getlightweightOwlFromSimplified);
+application.post(apiBasename + "/experimental/lightweight-owl-from-simplified.ttl", getLightweightOwlFromSimplified);
 
 // Generate artifacts
 
-application.get(apiBasename + "/generate", generate);
+application.get(apiBasename + "/generate", getZip);
 application.get(apiBasename + "/experimental/output.zip", getZip);
-application.get(apiBasename + "/preview/schema.json", getJsonSchema);
 application.get(apiBasename + "/preview/*", getSingleFile);
 application.get(apiBasename + "/generate/application", getGenerateApplicationByModelId);
 

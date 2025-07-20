@@ -6,11 +6,12 @@ import {
 
 import type { UseNotificationServiceWriterType } from "../notification/notification-service-context";
 import { ClassesContextType } from "../context/classes-context";
-import { isSemanticModelAttribute, SemanticModelRelationship, SemanticModelRelationshipEnd } from "@dataspecer/core-v2/semantic-model/concepts";
-import { isSemanticModelAttributeUsage, SemanticModelRelationshipEndUsage, SemanticModelRelationshipUsage } from "@dataspecer/core-v2/semantic-model/usage/concepts";
+import {
+  SemanticModelRelationship,
+  SemanticModelRelationshipEnd
+} from "@dataspecer/core-v2/semantic-model/concepts";
 import { DomainAndRange, getDomainAndRange } from "../util/relationship-utils";
 import { SemanticModelRelationshipProfile } from "@dataspecer/core-v2/semantic-model/profile/concepts";
-import { isSemanticModelAttributeProfile } from "../dataspecer/semantic-model";
 
 // I chose to process attributes separately instead of using the removeFromVisualModelAction.
 // It needs additional arguments to the method and the attributes are in a way kind of
@@ -18,7 +19,8 @@ import { isSemanticModelAttributeProfile } from "../dataspecer/semantic-model";
 // But maybe it is not ideal (RadStr)
 
 /**
- * Remove entity and related entities from visual model.
+ * Remove attributes from visual model. That is after this action not a single node will include any of
+ * the attributes listed in {@link attributeIdentifiers}.
  */
 export function removeAttributesFromVisualModelAction(
   notifications: UseNotificationServiceWriterType,
@@ -29,7 +31,7 @@ export function removeAttributesFromVisualModelAction(
 
   const nodeToRemovedAttributesMap: Record<string, {node: VisualNode, attributesToRemove: string[]}> = {};
   for (const attributeIdentifier of attributeIdentifiers) {
-    const domainAndRange = geDomainAndRangeForAttribute(notifications, classes, attributeIdentifier);
+    const domainAndRange = geDomainAndRangeForAttribute(classes, attributeIdentifier);
     if(domainAndRange === null) {
       continue;
     }
@@ -39,9 +41,9 @@ export function removeAttributesFromVisualModelAction(
   }
 
   // Perform the delete operation of collected visual entities.
-  Object.entries(nodeToRemovedAttributesMap).forEach(([nodeIdentifier, {node, attributesToRemove}]) => {
+  Object.entries(nodeToRemovedAttributesMap).forEach(([nodeIdentifier, { node, attributesToRemove }]) => {
     const content = node.content.filter(attribute => !attributesToRemove.includes(attribute));
-    visualModel.updateVisualEntity(nodeIdentifier, {content});
+    visualModel.updateVisualEntity(nodeIdentifier, { content });
   });
 }
 
@@ -49,7 +51,7 @@ function addAttributesToRemoveToTheMap(
   notifications: UseNotificationServiceWriterType,
   visualModel: WritableVisualModel,
   attributeIdentifier: string,
-  domainAndRange: DomainAndRange<SemanticModelRelationshipEndUsage> | DomainAndRange<SemanticModelRelationshipEnd>,
+  domainAndRange: DomainAndRange<SemanticModelRelationshipEnd>,
   nodeToRemovedAttributesMap: Record<string, {
     node: VisualNode;
     attributesToRemove: string[];
@@ -79,34 +81,12 @@ function addAttributesToRemoveToTheMap(
 }
 
 function geDomainAndRangeForAttribute(
-  notifications: UseNotificationServiceWriterType,
-  classes: ClassesContextType,
-  attributeIdentifier: string,
-): DomainAndRange<SemanticModelRelationshipEndUsage> | DomainAndRange<SemanticModelRelationshipEnd> | null {
-  let attribute: SemanticModelRelationship | SemanticModelRelationshipUsage | SemanticModelRelationshipProfile | undefined =
+  classes: ClassesContextType, attributeIdentifier: string,
+): DomainAndRange<SemanticModelRelationshipEnd> | null {
+  const attribute: SemanticModelRelationship | SemanticModelRelationshipProfile | undefined =
       classes.relationships.find(relationship => relationship.id === attributeIdentifier);
-  let domainAndRange;
-  if(attribute === undefined || !isSemanticModelAttribute(attribute)) {
-    attribute = classes.usages
-      .find(relationship => relationship.id === attributeIdentifier &&
-                            isSemanticModelAttributeUsage(relationship)) as SemanticModelRelationshipUsage | undefined;
-    if(attribute === undefined) {
-      attribute = classes.relationshipProfiles
-        .find(relationship => relationship.id === attributeIdentifier &&
-                              isSemanticModelAttributeProfile(relationship)) as SemanticModelRelationshipProfile | undefined;
-    }
-
-    if(attribute === undefined) {
-      notifications.error("One of given attributes can not be found in semantic models");
-      return null;
-    }
-    else {
-      domainAndRange = getDomainAndRange(attribute);
-    }
+  if (attribute === undefined) {
+    return null;
   }
-  else {
-    domainAndRange = getDomainAndRange(attribute);
-  }
-
-  return domainAndRange;
+  return getDomainAndRange(attribute);
 }

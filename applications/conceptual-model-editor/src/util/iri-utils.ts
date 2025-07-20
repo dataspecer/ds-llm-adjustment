@@ -1,25 +1,20 @@
 import {
   type SemanticModelClass,
   type SemanticModelEntity,
-  type SemanticModelGeneralization,
-  type SemanticModelRelationship,
   isSemanticModelClass,
   isSemanticModelGeneralization,
   isSemanticModelRelationship,
 } from "@dataspecer/core-v2/semantic-model/concepts";
 import type { EntityDetailSupportedType } from "./detail-utils";
-import {
-  type SemanticModelClassUsage,
-  type SemanticModelRelationshipUsage,
-  isSemanticModelClassUsage,
-  isSemanticModelRelationshipUsage,
-} from "@dataspecer/core-v2/semantic-model/usage/concepts";
-import type { EntityModel } from "@dataspecer/core-v2";
+import type { Entity, EntityModel } from "@dataspecer/core-v2";
 import { InMemorySemanticModel } from "@dataspecer/core-v2/semantic-model/in-memory";
+import {
+  isSemanticModelClassProfile,
+  isSemanticModelRelationshipProfile,
+} from "@dataspecer/core-v2/semantic-model/profile/concepts";
 
 import { getDomainAndRange } from "./relationship-utils";
 import { IRI } from "iri";
-import { isSemanticModelClassProfile, isSemanticModelRelationshipProfile, SemanticModelClassProfile, SemanticModelRelationshipProfile } from "@dataspecer/core-v2/semantic-model/profile/concepts";
 
 /**
  * @param entity
@@ -28,17 +23,7 @@ import { isSemanticModelClassProfile, isSemanticModelRelationshipProfile, Semant
  * For unknown entity returns `null`
  */
 export const getIri = (
-  entity:
-        | SemanticModelClass
-        | SemanticModelClassUsage
-        | SemanticModelRelationship
-        | SemanticModelRelationshipUsage
-        | SemanticModelGeneralization
-        | SemanticModelEntity
-        | SemanticModelClassProfile
-        | SemanticModelRelationshipProfile
-        | null
-        | undefined,
+  entity: Entity | null | undefined,
   modelBaseIri?: string
 ) => {
   if (!entity) {
@@ -53,10 +38,6 @@ export const getIri = (
     iri = range?.iri ?? null;
   } else if (isSemanticModelGeneralization(entity)) {
     iri = entity.iri;
-  } else if (isSemanticModelClassUsage(entity)) {
-    iri = (entity as SemanticModelClass & SemanticModelClassUsage)?.iri ?? null;
-  } else if (isSemanticModelRelationshipUsage(entity)) {
-    iri = getDomainAndRange(entity).range?.iri ?? null;
   } else if (isSemanticModelClassProfile(entity)) {
     iri = entity.iri;
   } else if (isSemanticModelRelationshipProfile(entity)) {
@@ -108,17 +89,9 @@ export const entityWithOverriddenIri = <T extends EntityDetailSupportedType | Se
   iri: string,
   entity: T
 ): T => {
-  if (isSemanticModelClass(entity) || isSemanticModelClassUsage(entity)) {
+  if (isSemanticModelClass(entity)) {
     return { ...entity, iri: iri };
   } else if (isSemanticModelRelationship(entity)) {
-    const currentEnds = getDomainAndRange(entity);
-    if (currentEnds.rangeIndex === null || currentEnds.range === null) {
-      return entity;
-    }
-    const newEnds = entity.ends;
-    newEnds[currentEnds.rangeIndex] = { ...currentEnds.range, iri: iri };
-    return { ...entity, ends: newEnds };
-  } else if (isSemanticModelRelationshipUsage(entity)) {
     const currentEnds = getDomainAndRange(entity);
     if (currentEnds.rangeIndex === null || currentEnds.range === null) {
       return entity;

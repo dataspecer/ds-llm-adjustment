@@ -2,8 +2,18 @@ import { type Dispatch, type SetStateAction, useEffect, useState } from "react";
 
 import type { Entity, EntityModel } from "@dataspecer/core-v2/entity-model";
 import { InMemorySemanticModel } from "@dataspecer/core-v2/semantic-model/in-memory";
-import { type VisualModel, VisualModelDataVersion, type WritableVisualModel, isVisualModel, isWritableVisualModel } from "@dataspecer/core-v2/visual-model";
-import { type AggregatedEntityWrapper, SemanticModelAggregator, type SemanticModelAggregatorView } from "@dataspecer/core-v2/semantic-model/aggregator";
+import {
+  type VisualModel,
+  VisualModelDataVersion,
+  type WritableVisualModel,
+  isVisualModel,
+  isWritableVisualModel,
+} from "@dataspecer/core-v2/visual-model";
+import {
+  type AggregatedEntityWrapper,
+  SemanticModelAggregator,
+  type SemanticModelAggregatorView,
+} from "@dataspecer/core-v2/semantic-model/aggregator";
 import {
   type SemanticModelClass,
   type SemanticModelGeneralization,
@@ -12,18 +22,13 @@ import {
   isSemanticModelGeneralization,
   isSemanticModelRelationship,
 } from "@dataspecer/core-v2/semantic-model/concepts";
-import {
-  type SemanticModelClassUsage,
-  type SemanticModelRelationshipUsage,
-  isSemanticModelClassUsage,
-  isSemanticModelRelationshipUsage,
-} from "@dataspecer/core-v2/semantic-model/usage/concepts";
 
 import { ClassesContext } from "./context/classes-context";
 import { ModelGraphContext } from "./context/model-context";
 import Header from "./header/header";
 import { useBackendConnection } from "./backend-connection";
-import { Catalog } from "./catalog/catalog";
+import { Catalog as CatalogV1 } from "./catalog/catalog";
+import { Catalog as CatalogV2 } from "./catalog-v2/catalog";
 import { Visualization } from "./visualization";
 import { bothEndsHaveAnIri } from "./util/relationship-utils";
 import { QueryParamsProvider, useQueryParamsContext } from "./context/query-params-context";
@@ -34,15 +39,37 @@ import { ActionsContextProvider } from "./action/actions-react-binding";
 import { OptionsContextProvider } from "./configuration/options";
 
 import { migrateVisualModelFromV0 } from "./dataspecer/visual-model/visual-model-v0-to-v1";
-import { ExplorationContextProvider } from "./diagram/features/highlighting/exploration/context/highlighting-exploration-mode";
-import { isSemanticModelClassProfile, isSemanticModelRelationshipProfile, SemanticModelClassProfile, SemanticModelRelationshipProfile } from "@dataspecer/core-v2/semantic-model/profile/concepts";
+import { ExplorationContextProvider } from "./context/highlighting-exploration-mode";
+import {
+  isSemanticModelClassProfile,
+  isSemanticModelRelationshipProfile,
+  SemanticModelClassProfile,
+  SemanticModelRelationshipProfile,
+} from "@dataspecer/core-v2/semantic-model/profile/concepts";
 import { createDefaultWritableVisualModel } from "./dataspecer/visual-model/visual-model-factory";
 import { VerticalSplitter } from "./components/vertical-splitter";
 import { preferences, updatePreferences } from "./configuration";
 import { sanitizeVisualModel } from "./dataspecer/visual-model/visual-model-sanitizer";
+import { getDefaultUserGivenAlgorithmConfigurationsFull, UserGivenAlgorithmConfigurations } from "@dataspecer/layout";
+import { LayoutConfigurationContext } from "./context/layout-configuration-context";
 
 const _semanticModelAggregator = new SemanticModelAggregator();
 type SemanticModelAggregatorType = typeof _semanticModelAggregator;
+
+/** Select Catalog component. */
+const Catalog = (() => {
+  const params = new URLSearchParams(window.location.search);
+  const catalog = params.get("dev-catalog");
+  if (catalog === "v1" || catalog === "v2") {
+    updatePreferences({ catalogComponent: catalog });
+  }
+  switch (preferences().catalogComponent) {
+  case "v1":
+    return CatalogV1;
+  case "v2":
+    return CatalogV2
+  }
+})();
 
 const Page = () => {
   // URL query
@@ -50,20 +77,23 @@ const Page = () => {
   // Dataspecer API
   const [aggregator, setAggregator] = useState(new SemanticModelAggregator());
   const [aggregatorView, setAggregatorView] = useState(aggregator.getView());
-  const { getModelsFromBackend } = useBackendConnection();
+  const { getModelsFromBackend, getLayoutConfigurationModelFromBackend } = useBackendConnection();
   // Local state
   const [models, setModels] = useState(new Map<string, EntityModel>());
   const [classes, setClasses] = useState<SemanticModelClass[]>([]);
   const [allowedClasses, setAllowedClasses] = useState<string[]>([]);
   const [relationships, setRelationships] = useState<SemanticModelRelationship[]>([]);
   const [generalizations, setGeneralizations] = useState<SemanticModelGeneralization[]>([]);
-  const [usages, setUsages] = useState<(SemanticModelClassUsage | SemanticModelRelationshipUsage)[]>([]);
   const [rawEntities, setRawEntities] = useState<(Entity | null)[]>([]);
   const [visualModels, setVisualModels] = useState(new Map<string, WritableVisualModel>());
   const [sourceModelOfEntityMap, setSourceModelOfEntityMap] = useState(new Map<string, string>());
   const [defaultModelAlreadyCreated, setDefaultModelAlreadyCreated] = useState(false);
   const [classProfiles, setClassProfiles] = useState<SemanticModelClassProfile[]>([]);
   const [relationshipProfiles, setRelationshipProfiles] = useState<SemanticModelRelationshipProfile[]>([]);
+  const [
+    layoutConfiguration,
+    setLayoutConfiguration
+  ] = useState<UserGivenAlgorithmConfigurations>(getDefaultUserGivenAlgorithmConfigurationsFull());
 
   // Runs on initial load.
   // If the app was launched without package-id query parameter
@@ -94,6 +124,8 @@ const Page = () => {
       return initializeWithPackage(
         packageId, viewId, aggregator,
         getModelsFromBackend,
+        getLayoutConfigurationModelFromBackend,
+        setLayoutConfiguration,
         setVisualModels,
         setModels,
         setAggregatorView,
@@ -115,7 +147,7 @@ const Page = () => {
       propagateAggregatorChangesToLocalState(
         updated, removed,
         setClasses, setRelationships,
-        setUsages, setGeneralizations, setRawEntities,
+        setGeneralizations, setRawEntities,
         setSourceModelOfEntityMap,
         setClassProfiles, setRelationshipProfiles,
         aggregatorView);
@@ -145,30 +177,31 @@ const Page = () => {
               setAllowedClasses,
               relationships,
               generalizations,
-              usages,
               sourceModelOfEntityMap,
               rawEntities,
               classProfiles,
               relationshipProfiles,
             }}
           >
-            <DialogContextProvider>
-              <ActionsContextProvider>
-                <Header />
-                <main className="w-full flex-grow bg-teal-50 md:h-[calc(100%-48px)]">
-                  <VerticalSplitter
-                    className="h-full"
-                    initialSize={preferences().pageSplitterValue}
-                    onSizeChange={value => updatePreferences({pageSplitterValue: value})}
-                  >
-                    <Catalog />
-                    <Visualization />
-                  </VerticalSplitter>
-                </main>
-                <NotificationList />
-                <DialogRenderer />
-              </ActionsContextProvider>
-            </DialogContextProvider>
+            <LayoutConfigurationContext.Provider value={{ layoutConfiguration, setLayoutConfiguration }}>
+              <DialogContextProvider>
+                <ActionsContextProvider>
+                  <Header />
+                  <main className="w-full flex-grow bg-teal-50 md:h-[calc(100%-48px)]">
+                    <VerticalSplitter
+                      className="h-full"
+                      initialSize={preferences().pageSplitterValue}
+                      onSizeChange={value => updatePreferences({ pageSplitterValue: value })}
+                    >
+                      <Catalog />
+                      <Visualization />
+                    </VerticalSplitter>
+                  </main>
+                  <NotificationList />
+                  <DialogRenderer />
+                </ActionsContextProvider>
+              </DialogContextProvider>
+            </LayoutConfigurationContext.Provider>
           </ClassesContext.Provider>
         </ModelGraphContext.Provider>
       </OptionsContextProvider>
@@ -228,11 +261,22 @@ function initializeWithPackage(
   viewId: string | null,
   aggregator: SemanticModelAggregatorType,
   getModelsFromBackend: (packageId: string) => Promise<readonly [EntityModel[], VisualModel[]]>,
+  getLayoutConfigurationModelFromBackend: (packageIdentifier: string) => Promise<UserGivenAlgorithmConfigurations>,
+  setLayoutConfiguration: Dispatch<SetStateAction<UserGivenAlgorithmConfigurations>>,
   setVisualModels: Dispatch<SetStateAction<Map<string, WritableVisualModel>>>,
   setModels: Dispatch<SetStateAction<Map<string, EntityModel>>>,
   setAggregatorView: Dispatch<SetStateAction<SemanticModelAggregatorView>>,
   updatePackageId: (packageId: string | null) => void,
 ) {
+  const getLayoutConfiguration = () => getLayoutConfigurationModelFromBackend(packageId);
+  // I think that no clean up is needed (as in case of models), since we are always setting with concrete value
+  getLayoutConfiguration().then((layoutConfiguration) => {
+    setLayoutConfiguration(layoutConfiguration);
+  }).catch((error) => {
+    console.error("Can not load configuration for layouting. Using the default", error);
+    setLayoutConfiguration(getDefaultUserGivenAlgorithmConfigurationsFull());
+  });
+
   const getModels = () => getModelsFromBackend(packageId);
 
   const cleanup = getModels().then((models) => {
@@ -330,7 +374,6 @@ function propagateAggregatorChangesToLocalState(
   // Local state.
   setClasses: Dispatch<SetStateAction<SemanticModelClass[]>>,
   setRelationships: Dispatch<SetStateAction<SemanticModelRelationship[]>>,
-  setUsages: Dispatch<SetStateAction<(SemanticModelClassUsage | SemanticModelRelationshipUsage)[]>>,
   setGeneralizations: Dispatch<SetStateAction<SemanticModelGeneralization[]>>,
   setRawEntities: Dispatch<SetStateAction<(Entity | null)[]>>,
   setSourceModelOfEntityMap: Dispatch<SetStateAction<Map<string, string>>>,
@@ -345,7 +388,6 @@ function propagateAggregatorChangesToLocalState(
     updatedClasses,
     updatedRelationships,
     updatedGeneralizations,
-    updatedProfiles: updatedUsages,
     updatedRawEntities,
     updatedClassProfiles,
     updatedRelationshipProfiles,
@@ -355,7 +397,6 @@ function propagateAggregatorChangesToLocalState(
         updatedClasses,
         updatedRelationships,
         updatedGeneralizations,
-        updatedProfiles,
         updatedRawEntities,
         updatedClassProfiles,
         updatedRelationshipProfiles,
@@ -368,7 +409,6 @@ function propagateAggregatorChangesToLocalState(
           updatedClasses: updatedClasses.concat(curr.aggregatedEntity),
           updatedRelationships,
           updatedGeneralizations,
-          updatedProfiles,
           updatedRawEntities: updatedRawEntities.concat(curr.rawEntity),
           updatedClassProfiles,
           updatedRelationshipProfiles,
@@ -384,7 +424,6 @@ function propagateAggregatorChangesToLocalState(
             updatedClasses,
             updatedRelationships,
             updatedGeneralizations,
-            updatedProfiles,
             updatedRawEntities: updatedRawEntities.concat(curr.rawEntity),
             updatedClassProfiles,
             updatedRelationshipProfiles,
@@ -394,19 +433,6 @@ function propagateAggregatorChangesToLocalState(
           updatedClasses,
           updatedRelationships: updatedRelationships.concat(curr.aggregatedEntity),
           updatedGeneralizations,
-          updatedProfiles,
-          updatedRawEntities: updatedRawEntities.concat(curr.rawEntity),
-          updatedClassProfiles,
-          updatedRelationshipProfiles,
-        };
-      } else if (
-        isSemanticModelClassUsage(curr.aggregatedEntity) || isSemanticModelRelationshipUsage(curr.aggregatedEntity)
-      ) {
-        return {
-          updatedClasses,
-          updatedRelationships,
-          updatedGeneralizations,
-          updatedProfiles: updatedProfiles.concat(curr.aggregatedEntity),
           updatedRawEntities: updatedRawEntities.concat(curr.rawEntity),
           updatedClassProfiles,
           updatedRelationshipProfiles,
@@ -416,7 +442,6 @@ function propagateAggregatorChangesToLocalState(
           updatedClasses,
           updatedRelationships,
           updatedGeneralizations: updatedGeneralizations.concat(curr.aggregatedEntity),
-          updatedProfiles,
           updatedRawEntities: updatedRawEntities.concat(curr.rawEntity),
           updatedClassProfiles,
           updatedRelationshipProfiles,
@@ -426,7 +451,6 @@ function propagateAggregatorChangesToLocalState(
           updatedClasses,
           updatedRelationships,
           updatedGeneralizations,
-          updatedProfiles,
           updatedRawEntities: updatedRawEntities.concat(curr.rawEntity),
           updatedClassProfiles: updatedClassProfiles.concat(curr.aggregatedEntity),
           updatedRelationshipProfiles,
@@ -436,7 +460,6 @@ function propagateAggregatorChangesToLocalState(
           updatedClasses,
           updatedRelationships,
           updatedGeneralizations,
-          updatedProfiles,
           updatedRawEntities: updatedRawEntities.concat(curr.rawEntity),
           updatedClassProfiles,
           updatedRelationshipProfiles: updatedRelationshipProfiles.concat(curr.aggregatedEntity),
@@ -450,7 +473,6 @@ function propagateAggregatorChangesToLocalState(
       updatedClasses: [] as SemanticModelClass[],
       updatedRelationships: [] as SemanticModelRelationship[],
       updatedGeneralizations: [] as SemanticModelGeneralization[],
-      updatedProfiles: [] as (SemanticModelClassUsage | SemanticModelRelationshipUsage)[],
       updatedRawEntities: [] as (Entity | null)[],
       updatedClassProfiles: [] as SemanticModelClassProfile[],
       updatedRelationshipProfiles: [] as SemanticModelRelationshipProfile[],
@@ -473,7 +495,6 @@ function propagateAggregatorChangesToLocalState(
   setClasses(prev => updateItems(prev, removedIds, updatedClasses));
   setRelationships(prev => updateItems(prev, removedIds, updatedRelationships));
   setGeneralizations(prev => updateItems(prev, removedIds, updatedGeneralizations));
-  setUsages(prev => updateItems(prev, removedIds, updatedUsages));
   setRawEntities(prev => updateItems(
     prev.filter(item => item !== null),
     removedIds,

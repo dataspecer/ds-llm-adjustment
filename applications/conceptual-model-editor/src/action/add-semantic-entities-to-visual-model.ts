@@ -3,7 +3,11 @@ import { ModelGraphContextType } from "../context/model-context";
 import { UseNotificationServiceWriterType } from "../notification/notification-service-context";
 import { UseDiagramType } from "../diagram/diagram-hook";
 import { sourceModelOfEntity } from "../util/model-utils";
-import { isSemanticModelClass, isSemanticModelGeneralization, isSemanticModelRelationship } from "@dataspecer/core-v2/semantic-model/concepts";
+import {
+  isSemanticModelClass,
+  isSemanticModelGeneralization,
+  isSemanticModelRelationship
+} from "@dataspecer/core-v2/semantic-model/concepts";
 import { addSemanticClassToVisualModelAction } from "./add-class-to-visual-model";
 import { addSemanticClassProfileToVisualModelAction } from "./add-class-profile-to-visual-model";
 import { addSemanticRelationshipToVisualModelAction } from "./add-relationship-to-visual-model";
@@ -13,7 +17,10 @@ import { Entity, EntityModel } from "@dataspecer/core-v2";
 import { ClassesContextType } from "../context/classes-context";
 import { XY } from "@dataspecer/layout";
 import { findPositionForNewNodesUsingLayouting } from "./layout-visual-model";
-import { isSemanticModelClassProfile, isSemanticModelRelationshipProfile } from "@dataspecer/core-v2/semantic-model/profile/concepts";
+import {
+  isSemanticModelClassProfile,
+  isSemanticModelRelationshipProfile
+} from "@dataspecer/core-v2/semantic-model/profile/concepts";
 
 export type EntityToAddToVisualModel = {
     /**
@@ -21,7 +28,8 @@ export type EntityToAddToVisualModel = {
      */
     identifier: string,
     /**
-     * The position to put the newly created visual entity at if the position is null or undefined then default placement is chosen based on type of entity.
+     * The position to put the newly created visual entity at if the position
+     * is null or undefined then default placement is chosen based on type of entity.
      */
     position?: XY | null
 };
@@ -63,7 +71,7 @@ async function updatePositionsAndSplitIntoNodesAndEdges(
   const edges: ValidatedDataAboutEntity[] = [];
 
   for(const validatedEntityToAddToVisualModel of validatedEntitiesToAddToVisualModel) {
-    const {entity, position} = validatedEntityToAddToVisualModel
+    const { entity, position } = validatedEntityToAddToVisualModel
     if(isSemanticModelClass(entity)) {
       if(position === null) {
         classAndClassProfilesToFindPositionsFor.push(entity.id);
@@ -82,7 +90,9 @@ async function updatePositionsAndSplitIntoNodesAndEdges(
       }
       nodes.push(validatedEntityToAddToVisualModel);
     }
-    else if(isSemanticModelRelationship(entity) || isSemanticModelRelationshipProfile(entity) || isSemanticModelGeneralization(entity)) {
+    else if(isSemanticModelRelationship(entity)
+      || isSemanticModelRelationshipProfile(entity)
+      || isSemanticModelGeneralization(entity)) {
       edges.push(validatedEntityToAddToVisualModel);
     }
     else {  // Maybe unnecessary
@@ -125,7 +135,8 @@ function validateEntities(
     const model = sourceModelOfEntity(entityIdentifier, [...graph.models.values()]);
     if(model === undefined) {
       // Note that we continue, therefore if one entity fails, the addition of rest is not affected.
-      notifications.error(`The entity ${entityIdentifier} which should have been added to visual model doesn't have source semantic model`);
+      notifications.error(
+        `The entity ${entityIdentifier} to add to the visual model doesn't have source semantic model`);
       continue;
     }
 
@@ -134,7 +145,7 @@ function validateEntities(
       notifications.error(`The entity ${entityIdentifier} can't be found in the relevant model`);
       continue;
     }
-    validatedEntitiesToAddToVisualModel.push({entity, model, position});
+    validatedEntitiesToAddToVisualModel.push({ entity, model, position });
   }
 
   return validatedEntitiesToAddToVisualModel;
@@ -148,23 +159,25 @@ async function addClassesAndClassProfilesToVisualModel(
   diagram: UseDiagramType,
   validatedNodesData: ValidatedDataAboutEntity[]
 ) {
-  for(const {entity, model, position} of validatedNodesData) {
+  for(const { entity, model, position } of validatedNodesData) {
     const modelIdentifier = model.getId();
-    // TODO RadStr: Hotfix for https://github.com/mff-uk/dataspecer/issues/1017 since it is called here,
-    //              so we catch the exception and move to next class
     try {
       if(isSemanticModelClass(entity)) {
-        await addSemanticClassToVisualModelAction(notifications, graph, classes, visualModel, diagram, entity.id, modelIdentifier, position);
+        await addSemanticClassToVisualModelAction(
+          notifications, graph, classes, visualModel, diagram, entity.id, modelIdentifier, position);
       }
       else if(isSemanticModelClassProfile(entity)) {
-        await addSemanticClassProfileToVisualModelAction(notifications, graph, classes, visualModel, diagram, entity.id, modelIdentifier, position);
+        await addSemanticClassProfileToVisualModelAction(
+          notifications, graph, classes, visualModel, diagram, entity.id, modelIdentifier, position);
       }
       else {
         notifications.error("Adding node of not supported type");
       }
     }
     catch {
-      console.info("Exception when adding class or class profile, but it is most likely nothing to worry about, since it is known issue https://github.com/mff-uk/dataspecer/issues/1017");
+      console.info(
+        "Exception when adding class or class profile, but it is most likely nothing to worry about, "
+        +" since it is known issue https://github.com/dataspecer/dataspecer/issues/1017");
     }
   }
 }
@@ -175,7 +188,7 @@ function addConnectionsToVisualModel(
   visualModel: WritableVisualModel,
   validatedEdgesData: ValidatedDataAboutEntity[]
 ) {
-  for(const {entity, model} of validatedEdgesData) {
+  for(const { entity, model } of validatedEdgesData) {
     const modelIdentifier = model.getId();
     if(isSemanticModelRelationship(entity)) {
       addSemanticRelationshipToVisualModelAction(

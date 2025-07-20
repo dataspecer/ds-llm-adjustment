@@ -1,5 +1,4 @@
 import { WritableVisualModel } from "@dataspecer/core-v2/visual-model";
-import { SemanticModelClassUsage, isSemanticModelClassUsage } from "@dataspecer/core-v2/semantic-model/usage/concepts";
 
 import { UseNotificationServiceWriterType } from "../notification/notification-service-context";
 import { ModelGraphContextType } from "../context/model-context";
@@ -9,8 +8,11 @@ import { ClassesContextType } from "../context/classes-context";
 import { findPositionForNewNodesUsingLayouting } from "./layout-visual-model";
 import { findSourceModelOfEntity } from "../service/model-service";
 import { createLogger } from "../application";
-import { isSemanticModelClassProfile, SemanticModelClassProfile } from "@dataspecer/core-v2/semantic-model/profile/concepts";
-import { getVisualNodeContentBasedOnExistingEntities } from "./add-semantic-attribute-to-visual-model";
+import {
+  isSemanticModelClassProfile,
+  SemanticModelClassProfile
+} from "@dataspecer/core-v2/semantic-model/profile/concepts";
+import { getVisualNodeContentBasedOnExistingEntities } from "./utilities";
 
 const LOG = createLogger(import.meta.url);
 
@@ -35,26 +37,19 @@ export async function addSemanticClassProfileToVisualModelAction(
 
   const model = findSourceModelOfEntity(entityIdentifier, graph.models);
   if (model === null) {
-    LOG.error("Operation ignored, we fail to find model for given entity.", {identifier: entityIdentifier});
+    LOG.error("Operation ignored, we fail to find model for given entity.", { identifier: entityIdentifier });
     notifications.error("Can not find model for given entity");
     return;
   }
 
   const entity = entities[entityIdentifier].aggregatedEntity;
   if (entity === undefined || entity === null) {
-    LOG.error("Missing semantic entity.", {identifier: entityIdentifier, entities});
+    LOG.error("Missing semantic entity.", { identifier: entityIdentifier, entities });
     notifications.error("Missing semantic entity.");
     return;
   }
 
-  if (isSemanticModelClassUsage(entity)) {
-    addSemanticClassUsageToVisualModelCommand(
-      classes, visualModel, entity, model.getId(),
-      position);
-    addRelatedEntitiesAction(
-      notifications, graph, visualModel, Object.values(entities),
-      graph.models, entity);
-  } else if (isSemanticModelClassProfile(entity)) {
+  if (isSemanticModelClassProfile(entity)) {
     addSemanticClassProfileToVisualModelCommand(
       classes, visualModel, entity, model.getId(),
       position);
@@ -66,28 +61,6 @@ export async function addSemanticClassProfileToVisualModelAction(
     notifications.error("Invalid entity type!");
     return;
   }
-}
-
-function addSemanticClassUsageToVisualModelCommand(
-  classes: ClassesContextType,
-  visualModel: WritableVisualModel,
-  entity: SemanticModelClassUsage,
-  model: string,
-  position: { x: number, y: number },
-) {
-  const content = getVisualNodeContentBasedOnExistingEntities(
-    classes, entity);
-  visualModel.addVisualNode({
-    model: model,
-    representedEntity: entity.id,
-    position: {
-      x: position.x,
-      y: position.y,
-      anchored: null,
-    },
-    content,
-    visualModels: [],
-  });
 }
 
 function addSemanticClassProfileToVisualModelCommand(

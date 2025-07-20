@@ -2,19 +2,32 @@ import { WritableVisualModel } from "@dataspecer/core-v2/visual-model";
 import { ModelGraphContextType } from "../context/model-context";
 import { UseNotificationServiceWriterType } from "../notification/notification-service-context";
 import { getSelectionForWholeSemanticModel } from "./extend-selection-action";
-import { EntityToAddToVisualModel, addSemanticEntitiesToVisualModelAction } from "./add-semantic-entities-to-visual-model";
+import {
+  EntityToAddToVisualModel,
+  addSemanticEntitiesToVisualModelAction
+} from "./add-semantic-entities-to-visual-model";
 import { ClassesContextType } from "../context/classes-context";
 import { UseDiagramType } from "../diagram/diagram-hook";
 import { EntityModel } from "@dataspecer/core-v2";
-import { isSemanticModelAttribute, isSemanticModelClass, isSemanticModelRelationship, SemanticModelClass, SemanticModelRelationship } from "@dataspecer/core-v2/semantic-model/concepts";
-import { isSemanticModelClassProfile, SemanticModelClassProfile, SemanticModelRelationshipProfile } from "@dataspecer/core-v2/semantic-model/profile/concepts";
-import { isSemanticModelAttributeUsage, isSemanticModelClassUsage, SemanticModelClassUsage, SemanticModelRelationshipUsage } from "@dataspecer/core-v2/semantic-model/usage/concepts";
+import {
+  isSemanticModelAttribute,
+  isSemanticModelClass,
+  isSemanticModelRelationship,
+  SemanticModelClass,
+  SemanticModelRelationship
+} from "@dataspecer/core-v2/semantic-model/concepts";
+import {
+  isSemanticModelClassProfile,
+  SemanticModelClassProfile,
+  SemanticModelRelationshipProfile
+} from "@dataspecer/core-v2/semantic-model/profile/concepts";
 import { isSemanticModelAttributeProfile } from "../dataspecer/semantic-model";
 import { getDomainAndRange } from "../util/relationship-utils";
 import { addSemanticAttributeToVisualModelAction } from "./add-semantic-attribute-to-visual-model";
 
 /**
- * Adds entities from given semantic model identified by {@link semanticModelIdentifier} to currently active visual model.
+ * Adds entities from given semantic model identified by
+ * {@link semanticModelIdentifier} to currently active visual model.
  */
 export const addEntitiesFromSemanticModelToVisualModelAction = async (
   notifications: UseNotificationServiceWriterType,
@@ -33,7 +46,8 @@ export const addEntitiesFromSemanticModelToVisualModelAction = async (
     position: null,
   }));
 
-  entitiesToAddToVisualModel.push(...entitiesFromSemanticModel.edgeSelection.map(edge => ({identifier: edge, position: null})));
+  entitiesToAddToVisualModel.push(
+    ...entitiesFromSemanticModel.edgeSelection.map(edge => ({ identifier: edge, position: null })));
   // Find those which are not already on canvas.
   entitiesToAddToVisualModel = entitiesToAddToVisualModel
     .filter(entity => !visualModel.hasVisualEntityForRepresented(entity.identifier));
@@ -42,11 +56,10 @@ export const addEntitiesFromSemanticModelToVisualModelAction = async (
     .filter(identifier => visualModel.hasVisualEntityForRepresented(identifier))
     .map(identifier => classesContext.rawEntities.find(entity => entity?.id === identifier))
     .filter(entity => entity !== null && entity !== undefined)
-    .filter(entity => isSemanticModelClass(entity) ||
-                      isSemanticModelClassProfile(entity) ||
-                      isSemanticModelClassUsage(entity));
+    .filter(entity => isSemanticModelClass(entity) || isSemanticModelClassProfile(entity));
 
-  await addSemanticEntitiesToVisualModelAction(notifications, classesContext, graph, visualModel, diagram, entitiesToAddToVisualModel);
+  await addSemanticEntitiesToVisualModelAction(
+    notifications, classesContext, graph, visualModel, diagram, entitiesToAddToVisualModel);
 
   addHiddenAttributesForExistingClassesAndClassProfiles(
     notifications, classesContext, visualModel, classesPresentOnCanvas);
@@ -56,16 +69,13 @@ function addHiddenAttributesForExistingClassesAndClassProfiles(
   notifications: UseNotificationServiceWriterType,
   classesContext: ClassesContextType,
   visualModel: WritableVisualModel,
-  classesPresentOnCanvas: (SemanticModelClass | SemanticModelClassProfile | SemanticModelClassUsage)[]
+  classesPresentOnCanvas: (SemanticModelClass | SemanticModelClassProfile)[]
 ): void {
-  // TODO RadStr: The finding of allAttributes could maybe be part of some exported utility function
   const attributes = classesContext.relationships.filter(isSemanticModelAttribute);
-  const attributeUsages = classesContext.usages.filter(isSemanticModelAttributeUsage);
   const attributeProfiles = classesContext.relationshipProfiles.filter(isSemanticModelAttributeProfile);
 
-  const allAttributes = ([] as (SemanticModelRelationship |
-    SemanticModelRelationshipProfile |
-    SemanticModelRelationshipUsage)[]).concat(attributes).concat(attributeUsages).concat(attributeProfiles);
+  const allAttributes = ([] as (SemanticModelRelationship | SemanticModelRelationshipProfile)[])
+    .concat(attributes).concat(attributeProfiles);
 
   for (const classPresentOnCanvas of classesPresentOnCanvas) {
     for(const attribute of allAttributes) {
@@ -81,7 +91,6 @@ function addHiddenAttributesForExistingClassesAndClassProfiles(
           continue;
         }
       }
-      // TODO RadStr: Maybe it would be better to allow for the function to take more than 1 attribute
       addSemanticAttributeToVisualModelAction(
         notifications, visualModel, classPresentOnCanvas.id, attribute.id, false);
     }
