@@ -42,7 +42,6 @@ export default function SpecificationSelector({ onSpecificationSelected }: Speci
 
   const handleSearchChange = (value: string) => {
     setSearchTerm(value)
-    // Debounce search
     const timeoutId = setTimeout(() => {
       loadSpecifications(value || undefined)
     }, 300)
@@ -77,7 +76,7 @@ export default function SpecificationSelector({ onSpecificationSelected }: Speci
   if (error) {
     return (
       <div className="text-center py-12">
-        <div className="text-red-400 mb-4">{error}</div>
+        <div className="text-red-200 mb-4">{error}</div>
         <button
           onClick={() => loadSpecifications()}
           className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"

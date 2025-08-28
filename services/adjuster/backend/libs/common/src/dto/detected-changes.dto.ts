@@ -9,39 +9,39 @@ export enum ChangeType {
 
 export class DetectedChange {
   @IsString()
-  changeId: string;
+  public changeId: string;
 
   @IsArray()
   @IsEnum(ChangeType, { each: true })
-  type: ChangeType[];
+  public type: ChangeType[];
 
   @IsString()
-  path: string;
+  public path: string;
 
   @IsString()
-  description: string;
+  public description: string;
 
   @IsBoolean()
-  isAcceptable: boolean;
+  public isAcceptable: boolean;
 
   @IsOptional()
   @IsString()
-  groupId?: string;
+  public groupId?: string;
 }
 
 export class DetectedChangesDto {
   @IsString()
-  dialogId: string;
+  public dialogId: string;
 
   @IsArray()
   @ValidateNested({ each: true })
-  changes: DetectedChange[];
+  public changes: DetectedChange[];
 
   @IsOptional()
   @IsString()
-  psm?: string;
+  public psm?: string;
 
   @IsOptional()
   @IsString()
-  psmIri?: string;
+  public psmIri?: string;
 }

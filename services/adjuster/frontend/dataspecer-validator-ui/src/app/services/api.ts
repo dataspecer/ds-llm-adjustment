@@ -86,6 +86,21 @@ export interface StoreAnalysisDto {
   decisions?: ChangeDecisionDto[];
 }
 
+export interface AcceptedChangeDto {
+  changeId: string;
+  analysisId: string;
+  type: 'addition' | 'removal' | 'rename' | 'type-change';
+  path: string;
+  description: string;
+  comment?: string;
+  timestamp: string;
+  oldSchemaName: string;
+  newSchemaName: string;
+  psmFileName: string;
+  suggestion?: string;
+  rationale?: string;
+}
+
 export interface ApiResponse<T> {
   data?: T;
   error?: string;
@@ -121,9 +136,10 @@ export interface SendMessageDto {
 }
 
 class Api {
-  private changesDetectorUrl = process.env.NEXT_PUBLIC_CHANGES_DETECTOR_URL || 'http://localhost:3101';
-  private changesSuggesterUrl = process.env.NEXT_PUBLIC_CHANGES_SUGGESTER_URL || 'http://localhost:3102';
-  private dialogHandlerUrl = process.env.NEXT_PUBLIC_DIALOG_HANDLER_URL || 'http://localhost:3101';
+  private changesDetectorUrl = process.env.NEXT_PUBLIC_CHANGES_DETECTOR_URL || 'http://localhost:3000/detector';
+  private changesSuggesterUrl = process.env.NEXT_PUBLIC_CHANGES_SUGGESTER_URL || 'http://localhost:3000/suggester';
+  private dialogHandlerUrl = process.env.NEXT_PUBLIC_DIALOG_HANDLER_URL || 'http://localhost:3000/dialogs-handler';
+  private dataspecerBackendUrl = process.env.NEXT_PUBLIC_DATASPECER_BACKEND || 'http://localhost:3000/dataspecer';
 
   async detectChangesFromIri(
     psmIri: string,
@@ -132,7 +148,7 @@ class Api {
     dialogId: string
   ): Promise<ApiResponse<DetectedChangesDto>> {
     try {
-      const response = await fetch(`${this.changesDetectorUrl}/api/detect-changes-from-iri`, {
+      const response = await fetch(`${this.changesDetectorUrl}/api/changes/detections/from-iri`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -165,10 +181,10 @@ class Api {
     dialogId: string
   ): Promise<ApiResponse<DetectedChangesDto>> {
     try {
-      console.log('Making detectChangesHybrid request to:', `${this.changesDetectorUrl}/api/detect-changes-hybrid`);
+      console.log('Making detectChangesHybrid request to:', `${this.changesDetectorUrl}/api/changes/detections/hybrid`);
       console.log('Request body:', { psmIri, oldJsonSchema: `${oldJsonSchema.length} chars`, newJsonSchema: `${newJsonSchema.length} chars`, dialogId });
 
-      const response = await fetch(`${this.changesDetectorUrl}/api/detect-changes-hybrid`, {
+      const response = await fetch(`${this.changesDetectorUrl}/api/changes/detections/hybrid`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -199,6 +215,53 @@ class Api {
     }
   }
 
+  /**
+   * Automatically detects changes by fetching both old JSON schema and PSM from Dataspecer using DSV approach.
+   * This eliminates the need for manual JSON schema uploads.
+   */
+  async detectChangesAutomatic(
+    dataSpecificationIri: string,
+    psmIri: string,
+    newJsonSchema: string,
+    dialogId: string
+  ): Promise<ApiResponse<DetectedChangesDto>> {
+    try {
+      console.log('Making detectChangesAutomatic request to:', `${this.changesDetectorUrl}/api/changes/detections/automatic`);
+      console.log('Request body:', { dataSpecificationIri, psmIri, newJsonSchema: `${newJsonSchema.length} chars`, dialogId });
+
+      const response = await fetch(`${this.changesDetectorUrl}/api/changes/detections/automatic`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          dataSpecificationIri,
+          psmIri,
+          newJsonSchema,
+          dialogId,
+        }),
+      });
+
+      console.log('Response status:', response.status);
+      console.log('Response ok:', response.ok);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Error response:', errorText);
+        throw new Error(`Failed to automatically detect changes: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      console.log('detectChangesAutomatic response data:', data);
+      return { data };
+    } catch (error) {
+      console.error('Error in detectChangesAutomatic:', error);
+      return {
+        error: error instanceof Error ? error.message : 'An error occurred',
+      };
+    }
+  }
+
   async detectChanges(
     oldApi: string,
     newApi: string,
@@ -220,10 +283,10 @@ class Api {
         body.psm = psm;
       }
 
-      console.log('Making detectChanges request to:', `${this.changesDetectorUrl}/api/detect-changes`);
+      console.log('Making detectChanges request to:', `${this.changesDetectorUrl}/api/changes/detections/raw`);
       console.log('Request body:', { ...body, oldApi: `${oldApi.length} chars`, newApi: `${newApi.length} chars`, psm: `${psm.length} chars` });
 
-      const response = await fetch(`${this.changesDetectorUrl}/api/detect-changes`, {
+      const response = await fetch(`${this.changesDetectorUrl}/api/changes/detections/raw`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -283,7 +346,7 @@ class Api {
 
   async getSpecifications(search?: string): Promise<ApiResponse<SpecificationDto[]>> {
     try {
-      const url = new URL(`${this.dialogHandlerUrl}/api/specification-maintainer/specifications`);
+      const url = new URL(`${this.dialogHandlerUrl}/api/specifications`);
       if (search) {
         url.searchParams.append('search', search);
       }
@@ -308,9 +371,9 @@ class Api {
     }
   }
 
-  async getSpecification(id: string): Promise<ApiResponse<SpecificationDto>> {
+  async getSpecification(idOrIri: string): Promise<ApiResponse<SpecificationDto>> {
     try {
-      const response = await fetch(`${this.dialogHandlerUrl}/api/specification-maintainer/specifications/${id}`, {
+      const response = await fetch(`${this.dialogHandlerUrl}/api/specifications/psm?iri=${encodeURIComponent(idOrIri)}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -332,7 +395,7 @@ class Api {
 
   async analyzeSchema(specificationId: string, schema: string, schemaFileName: string): Promise<ApiResponse<{ changes: SchemaChangeDto[] }>> {
     try {
-      const response = await fetch(`${this.dialogHandlerUrl}/api/specification-maintainer/analyze`, {
+      const response = await fetch(`${this.dialogHandlerUrl}/api/specifications/analyses`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -359,7 +422,7 @@ class Api {
 
   async applyChanges(specificationId: string, decisions: ChangeDecisionDto[]): Promise<ApiResponse<{ success: boolean; message: string }>> {
     try {
-      const response = await fetch(`${this.dialogHandlerUrl}/api/specification-maintainer/apply-changes`, {
+      const response = await fetch(`${this.dialogHandlerUrl}/api/specifications/changes/apply`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -385,7 +448,7 @@ class Api {
 
   async exportReport(specificationId: string, decisions: ChangeDecisionDto[]): Promise<ApiResponse<{ report: unknown }>> {
     try {
-      const response = await fetch(`${this.dialogHandlerUrl}/api/specification-maintainer/export-report`, {
+      const response = await fetch(`${this.dialogHandlerUrl}/api/specifications/reports`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -411,7 +474,7 @@ class Api {
 
   async generateValidationLink(specificationId: string): Promise<ApiResponse<{ token: string; url: string }>> {
     try {
-      const response = await fetch(`${this.dialogHandlerUrl}/api/specification-maintainer/validation-link`, {
+      const response = await fetch(`${this.dialogHandlerUrl}/api/specifications/validation-links`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -436,7 +499,7 @@ class Api {
 
   async validateWithToken(token: string): Promise<ApiResponse<{ valid: boolean; specification: SpecificationDto }>> {
     try {
-      const response = await fetch(`${this.dialogHandlerUrl}/api/specification-maintainer/validate?token=${encodeURIComponent(token)}`, {
+      const response = await fetch(`${this.dialogHandlerUrl}/api/specifications/validation?token=${encodeURIComponent(token)}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -461,7 +524,7 @@ class Api {
    */
   async storeAnalysis(storeDto: StoreAnalysisDto): Promise<ApiResponse<{ success: boolean; shareUrl: string }>> {
     try {
-      const response = await fetch(`${this.dialogHandlerUrl}/api/specification-maintainer/store-analysis`, {
+      const response = await fetch(`${this.dialogHandlerUrl}/api/specifications/analyses/share`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -487,7 +550,7 @@ class Api {
    */
   async getSharedAnalysis(analysisId: string): Promise<ApiResponse<SharedAnalysisDto>> {
     try {
-      const response = await fetch(`${this.dialogHandlerUrl}/api/specification-maintainer/shared-analysis/${encodeURIComponent(analysisId)}`, {
+      const response = await fetch(`${this.dialogHandlerUrl}/api/specifications/analyses/${encodeURIComponent(analysisId)}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -508,11 +571,40 @@ class Api {
   }
 
   /**
+   * Validate developer re-upload against shared analysis
+   */
+  async validateReuploadAgainstAnalysis(
+    analysisId: string,
+    newSchema: string
+  ): Promise<ApiResponse<{ analysisId: string; summary: { addressed: number; stillPresent: number; unclear: number }; items: Array<{ changeId: string; decision?: string; status: 'addressed' | 'still-present' | 'unclear'; notes?: string }> }>> {
+    try {
+      const response = await fetch(`${this.dialogHandlerUrl}/api/specifications/analyses/${encodeURIComponent(analysisId)}/reupload-validations`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ newSchema }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to validate re-upload');
+      }
+
+      const data = await response.json();
+      return { data };
+    } catch (error) {
+      return {
+        error: error instanceof Error ? error.message : 'An error occurred',
+      };
+    }
+  }
+
+  /**
    * Fetch PSM content from IRI
    */
   async fetchPsmFromIri(psmIri: string): Promise<ApiResponse<{ content: string; name: string }>> {
     try {
-      const response = await fetch(`${this.dialogHandlerUrl}/api/specification-maintainer/fetch-psm?iri=${encodeURIComponent(psmIri)}`, {
+      const response = await fetch(`${this.dialogHandlerUrl}/api/specifications/psm?iri=${encodeURIComponent(psmIri)}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -532,6 +624,31 @@ class Api {
     }
   }
 
+  /**
+   * Fetch JSON Schema from Dataspecer using DSV approach
+   */
+  async fetchJsonSchemaFromDsv(dataSpecificationIri: string): Promise<ApiResponse<{ content: string; name: string }>> {
+    try {
+      const response = await fetch(`${this.changesDetectorUrl}/api/changes/schemas/dsv?dataSpecificationIri=${encodeURIComponent(dataSpecificationIri)}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch JSON schema via DSV');
+      }
+
+      const data = await response.json();
+      return { data };
+    } catch (error) {
+      return {
+        error: error instanceof Error ? error.message : 'An error occurred',
+      };
+    }
+  }
+
   // ========== LLM Chat Methods ==========
 
   /**
@@ -539,7 +656,7 @@ class Api {
    */
   async startChat(startChatDto: StartChatDto): Promise<ApiResponse<ChatConversation>> {
     try {
-      const response = await fetch(`${this.dialogHandlerUrl}/api/specification-maintainer/chat/start`, {
+      const response = await fetch(`${this.dialogHandlerUrl}/api/specifications/chats`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -565,7 +682,7 @@ class Api {
    */
   async sendMessage(sendMessageDto: SendMessageDto): Promise<ApiResponse<ChatConversation>> {
     try {
-      const response = await fetch(`${this.dialogHandlerUrl}/api/specification-maintainer/chat/message`, {
+      const response = await fetch(`${this.dialogHandlerUrl}/api/specifications/chats/message`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -591,7 +708,7 @@ class Api {
    */
   async getConversation(conversationId: string): Promise<ApiResponse<ChatConversation>> {
     try {
-      const response = await fetch(`${this.dialogHandlerUrl}/api/specification-maintainer/chat/${encodeURIComponent(conversationId)}`, {
+      const response = await fetch(`${this.dialogHandlerUrl}/api/specifications/chats/${encodeURIComponent(conversationId)}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -616,7 +733,7 @@ class Api {
    */
   async getConversationsForChanges(changeIds: string[]): Promise<ApiResponse<ChatConversation[]>> {
     try {
-      const response = await fetch(`${this.dialogHandlerUrl}/api/specification-maintainer/chat/by-changes`, {
+      const response = await fetch(`${this.dialogHandlerUrl}/api/specifications/chats/by-changes`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -642,7 +759,7 @@ class Api {
    */
   async deleteConversation(conversationId: string): Promise<ApiResponse<{ success: boolean }>> {
     try {
-      const response = await fetch(`${this.dialogHandlerUrl}/api/specification-maintainer/chat/${encodeURIComponent(conversationId)}/delete`, {
+      const response = await fetch(`${this.dialogHandlerUrl}/api/specifications/chats/${encodeURIComponent(conversationId)}/delete`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -667,7 +784,7 @@ class Api {
    */
   async regenerateChangeDescription(changeId: string, feedback: string, currentChange: SchemaChangeDto): Promise<ApiResponse<{ updatedChange: SchemaChangeDto }>> {
     try {
-      const response = await fetch(`${this.dialogHandlerUrl}/api/specification-maintainer/regenerate-description`, {
+      const response = await fetch(`${this.dialogHandlerUrl}/api/specifications/changes/regenerate-description`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -681,6 +798,62 @@ class Api {
 
       if (!response.ok) {
         throw new Error('Failed to regenerate change description');
+      }
+
+      const data = await response.json();
+      return { data };
+    } catch (error) {
+      return {
+        error: error instanceof Error ? error.message : 'An error occurred',
+      };
+    }
+  }
+
+  /**
+   * Get all accepted changes from stored analyses
+   */
+  async getAcceptedChanges(): Promise<ApiResponse<{ acceptedChanges: AcceptedChangeDto[] }>> {
+    try {
+      const response = await fetch(`${this.dialogHandlerUrl}/api/specifications/changes/accepted`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch accepted changes');
+      }
+
+      const data = await response.json();
+      return { data };
+    } catch (error) {
+      return {
+        error: error instanceof Error ? error.message : 'An error occurred',
+      };
+    }
+  }
+
+  /**
+   * Generate a developer-facing prompt and validation link for re-upload after maintainer review
+   */
+  async generateDeveloperReuploadPrompt(
+    specificationId: string,
+    changes: SchemaChangeDto[],
+    decisions: ChangeDecisionDto[],
+    maintainerNote?: string
+  ): Promise<ApiResponse<{ prompt: string; token: string; url: string }>> {
+    try {
+      const response = await fetch(`${this.dialogHandlerUrl}/api/specifications/${encodeURIComponent(specificationId)}/developer-reupload-prompt`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ specificationId, changes, decisions, maintainerNote }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate developer re-upload prompt');
       }
 
       const data = await response.json();

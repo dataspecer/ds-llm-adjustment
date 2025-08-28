@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { SelectedSpecification, ChangeDecision } from '../types/specification-maintainer'
 import { api, SchemaChangeDto } from '../services/api'
 import LlmChat from './LlmChat'
@@ -13,6 +14,7 @@ interface ChangeSummaryProps {
 }
 
 export default function ChangeSummary({ specification, schema, schemaFileName, onBack }: ChangeSummaryProps) {
+  const router = useRouter()
   const [changes, setChanges] = useState<SchemaChangeDto[]>([])
   const [decisions, setDecisions] = useState<Map<string, ChangeDecision>>(new Map())
   const [selectedChange, setSelectedChange] = useState<string | null>(null)
@@ -57,14 +59,12 @@ export default function ChangeSummary({ specification, schema, schemaFileName, o
     const nextChanges = changes.slice(currentIndex + 1)
     const remainingChanges = changes.slice(0, currentIndex)
     
-    // First, look for changes after the current one
     for (const change of nextChanges) {
       if (!decisions.has(change.id)) {
         return change.id
       }
     }
     
-    // If no changes after current, look from the beginning
     for (const change of remainingChanges) {
       if (!decisions.has(change.id)) {
         return change.id
@@ -89,20 +89,17 @@ export default function ChangeSummary({ specification, schema, schemaFileName, o
     newDecisions.set(changeId, { changeId, decision, comment })
     setDecisions(newDecisions)
     
-    // Find and scroll to next unprocessed change
     const nextChangeId = findNextUnprocessedChange()
     if (nextChangeId) {
       setTimeout(() => {
         setSelectedChange(nextChangeId)
         scrollToChange(nextChangeId)
-      }, 300) // Small delay to allow UI to update
+      }, 300) 
     }
   }, [decisions, findNextUnprocessedChange, scrollToChange, setSelectedChange])
 
-  // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Only handle keyboard shortcuts when not in an input field
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
         return;
       }
@@ -163,10 +160,10 @@ export default function ChangeSummary({ specification, schema, schemaFileName, o
 
   const getChangeColor = (change: SchemaChangeDto) => {
     switch (change.type) {
-      case 'addition': return 'text-green-400'
-      case 'removal': return 'text-red-400'
-      case 'rename': return 'text-blue-400'
-      case 'type-change': return 'text-blue-400'
+      case 'addition': return 'text-green-200'
+      case 'removal': return 'text-red-200'
+      case 'rename': return 'text-blue-200'
+      case 'type-change': return 'text-yellow-200'
       default: return 'text-gray-400'
     }
   }
@@ -289,13 +286,10 @@ export default function ChangeSummary({ specification, schema, schemaFileName, o
         </div>
         <div className="flex space-x-2">
           <button
-            onClick={() => {
-              setChatSelectedChanges(changes.map(c => c.id))
-              setIsChatOpen(true)
-            }}
-            className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+            onClick={() => router.push('/accepted-changes')}
+            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
           >
-            💬 Chat about All Changes
+            📋 View Accepted Changes
           </button>
           <button
             onClick={() => setShowPreview(!showPreview)}
@@ -377,10 +371,10 @@ export default function ChangeSummary({ specification, schema, schemaFileName, o
                       </div>
                       <div className="flex items-center space-x-1">
                         {change.isAcceptable && (
-                          <span className="text-xs text-green-400">✓</span>
+                          <span className="text-xs text-green-200">✓</span>
                         )}
                         {change.isProblematic && (
-                          <span className="text-xs text-red-400">⚠</span>
+                          <span className="text-xs text-red-200">⚠</span>
                         )}
                       </div>
                     </div>
@@ -412,7 +406,7 @@ export default function ChangeSummary({ specification, schema, schemaFileName, o
                             className={`px-3 py-1 text-xs rounded transition-colors ${
                               decision?.decision === 'accept'
                                 ? 'bg-green-600 text-white'
-                                : 'bg-green-600 bg-opacity-20 text-green-400 hover:bg-opacity-40'
+                                : 'bg-green-600 bg-opacity-20 text-green-200 hover:bg-opacity-40'
                             }`}
                           >
                             Accept
@@ -425,7 +419,7 @@ export default function ChangeSummary({ specification, schema, schemaFileName, o
                             className={`px-3 py-1 text-xs rounded transition-colors ${
                               decision?.decision === 'reject'
                                 ? 'bg-red-600 text-white'
-                                : 'bg-red-600 bg-opacity-20 text-red-400 hover:bg-opacity-40'
+                                : 'bg-red-600 bg-opacity-20 text-red-200 hover:bg-opacity-40'
                             }`}
                           >
                             Reject
@@ -467,15 +461,15 @@ export default function ChangeSummary({ specification, schema, schemaFileName, o
             <h3 className="font-semibold text-white mb-3">Decision Summary</h3>
             <div className="grid grid-cols-3 gap-4 text-center text-sm">
               <div>
-                <div className="text-green-400 font-bold">{acceptedChanges.length}</div>
+                <div className="text-green-200 font-bold">{acceptedChanges.length}</div>
                 <div className="text-gray-400">Accepted</div>
               </div>
               <div>
-                <div className="text-red-400 font-bold">{rejectedChanges.length}</div>
+                <div className="text-red-200 font-bold">{rejectedChanges.length}</div>
                 <div className="text-gray-400">Rejected</div>
               </div>
               <div>
-                <div className="text-yellow-400 font-bold">{developerChanges.length}</div>
+                <div className="text-yellow-200 font-bold">{developerChanges.length}</div>
                 <div className="text-gray-400">Dev Flagged</div>
               </div>
             </div>

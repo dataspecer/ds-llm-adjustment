@@ -2,7 +2,18 @@
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "declaration": false,
-    "outDir": "../../dist/apps/dataspecer-adapter"
+    "outDir": "../../dist/apps/dataspecer-adapter",
+    "paths": {
+      "@app/common": [
+        "libs/common/src"
+      ],
+      "@app/common/*": [
+        "libs/common/src/*"
+      ],
+      "@interfaces/*": [
+        "apps/dataspecer-adapter/src/services/interfaces/*"
+      ]
+    }
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "test", "**/*spec.ts"]

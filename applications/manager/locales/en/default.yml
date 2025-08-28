@@ -77,4 +77,4 @@ sort-models:
   name-az: Alphabetically
   name-za: Reverse alphabetically
 successfully saved: Successfully saved.
-validate: Validate
+validate: Check changes

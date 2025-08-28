@@ -1,16 +1,22 @@
-import { Injectable } from '@nestjs/common';
-import { 
-  SpecificationDto, 
-  AnalyzeSchemaDto, 
-  SchemaChangeDto, 
-  ApplyChangesDto, 
-  ChangeDecisionDto,
-  SharedAnalysisDto,
-  StoreAnalysisDto
-} from '../../controllers/http/specification-maintainer/specification-maintainer.controller';
+import { Injectable, Inject } from '@nestjs/common';
+import { ClientProxy } from '@nestjs/microservices';
+import { firstValueFrom } from 'rxjs';
+import { SpecificationDto } from '../../dto/specification.dto';
+import { AnalyzeSchemaDto } from '../../dto/analyze-schema.dto';
+import { SchemaChangeDto } from '../../dto/schema-change.dto';
+import { ApplyChangesDto } from '../../dto/apply-changes.dto';
+import { ChangeDecisionDto } from '../../dto/change-decision.dto';
+import { SharedAnalysisDto } from '../../dto/shared-analysis.dto';
+import { StoreAnalysisDto } from '../../dto/store-analysis.dto';
+import { AcceptedChangeDto } from '../../dto/accepted-change.dto';
 
 @Injectable()
 export class SpecificationMaintainerService {
+
+  constructor(
+    @Inject('CHANGES_DETECTOR') private readonly changesDetectorClient: ClientProxy,
+    @Inject('DATASPECER_ADAPTER') private readonly dataspecerAdapterClient: ClientProxy,
+  ) {}
   // Mock specifications data
   private readonly mockSpecifications: SpecificationDto[] = [
     {
@@ -72,89 +78,99 @@ export class SpecificationMaintainerService {
   }
 
   /**
-   * Get a specific specification by ID
+   * Get a specific specification by ID (treat ID as PSM IRI)
    */
   async getSpecification(id: string): Promise<SpecificationDto> {
-    const spec = this.mockSpecifications.find(s => s.id === id);
-    if (!spec) {
-      throw new Error(`Specification with ID ${id} not found`);
+    // Try to resolve PSM content and label via Dataspecer adapter
+    try {
+      const dataspecerBaseUrl: string = process.env.DATASPECER_BACKEND_URL || process.env.DATASPECER_API_URL || 'http://dataspecer:80';
+      console.log('dataspecerBaseUrl', dataspecerBaseUrl);
+      console.log('id', id);
+      const psmContent: string = await firstValueFrom(
+        this.dataspecerAdapterClient.send('get.psm', { dataspecerBaseUrl, iri: id })
+      ) as string;
+
+      let psmName: string = '';
+      try {
+        const psmJson: any = JSON.parse(psmContent);
+        const label: any = (psmJson?.['rdfs:label']) as any;
+        if (typeof label === 'string') {
+          psmName = label;
+        } else if (label && typeof label === 'object') {
+          psmName = label['@value'] || label.value || '';
+        }
+      } catch {}
+
+      if (!psmName) {
+        const match: RegExpMatchArray | null = id.match(/([^\/]+)$/);
+        psmName = match ? match[1] : 'PSM';
+      }
+
+      return {
+        id,
+        name: psmName,
+        psm: {
+          id,
+          name: psmName,
+          iri: id,
+        },
+      };
+    } catch (e) {
+      // Fallback to mock if adapter fails
+      const spec: SpecificationDto | undefined = this.mockSpecifications.find(s => s.id === id || s.psm.iri === id);
+      if (!spec) {
+        throw new Error(`Specification with ID ${id} not found`);
+      }
+      return spec;
     }
-    return spec;
   }
 
   /**
    * Analyze schema against specification (mock implementation)
    */
   async analyzeSchema(analyzeDto: AnalyzeSchemaDto): Promise<{ changes: SchemaChangeDto[] }> {
-    // Simulate analysis delay
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    const dialogId: string = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 
-    // Mock changes detection based on schema content
-    const mockChanges: SchemaChangeDto[] = [
-      {
-        id: 'change-1',
-        type: 'addition',
-        path: '/properties/user/properties/email',
-        description: 'Added email property to user object',
-        newValue: { type: 'string', format: 'email' },
-        lineNumber: this.findLineNumber(analyzeDto.schema, 'email'),
-        groupId: 'group-1',
-        isAcceptable: true,
-        isProblematic: false,
-        suggestion: 'Add email field to User entity in PSM',
-        rationale: 'Email is a common user property and follows standard format'
-      },
-      {
-        id: 'change-2',
-        type: 'removal',
-        path: '/properties/user/properties/username',
-        description: 'Removed username property from user object',
-        oldValue: { type: 'string' },
-        lineNumber: this.findLineNumber(analyzeDto.schema, 'username'),
-        groupId: 'group-1',
-        isAcceptable: false,
-        isProblematic: true,
-        suggestion: 'Username is required for user identification',
-        rationale: 'Removing username breaks existing user identification logic'
-      },
-      {
-        id: 'change-3',
-        type: 'type-change',
-        path: '/properties/product/properties/price',
-        description: 'Changed price type from string to number',
-        oldValue: { type: 'string' },
-        newValue: { type: 'number' },
-        lineNumber: this.findLineNumber(analyzeDto.schema, 'price'),
-        isAcceptable: true,
-        isProblematic: false,
-        suggestion: 'Update PSM to use numeric type for price',
-        rationale: 'Numeric type is more appropriate for price calculations'
-      },
-      {
-        id: 'change-4',
-        type: 'rename',
-        path: '/properties/order/properties/orderDate',
-        description: 'Renamed orderDate to createdAt',
-        oldValue: 'orderDate',
-        newValue: 'createdAt',
-        lineNumber: this.findLineNumber(analyzeDto.schema, 'createdAt'),
-        groupId: 'group-2',
-        isAcceptable: true,
-        isProblematic: false,
-        suggestion: 'Rename orderDate field to createdAt in PSM',
-        rationale: 'createdAt is a more standard naming convention'
+    // Try to fetch the previous (old) JSON Schema from Dataspecer using the provided specification identifier (IRI)
+    const dataspecerBaseUrl: string = process.env.DATASPECER_BACKEND_URL || process.env.DATASPECER_API_URL || 'http://dataspecer:80';
+    let oldJsonSchema: string = '{}';
+    try {
+      const fetched: string = await firstValueFrom(
+        this.dataspecerAdapterClient.send('get.json.schema', {
+          dataspecerBaseUrl,
+          dataSpecificationIri: analyzeDto.specificationId,
+        })
+      ) as string;
+      if (typeof fetched === 'string' && fetched.trim().length > 0) {
+        oldJsonSchema = fetched;
       }
-    ];
+    } catch {
+      // Fallback to empty old schema when Dataspecer adapter lookup fails
+      oldJsonSchema = '{}';
+    }
 
-    // Filter changes based on actual schema content for more realistic results
-    const filteredChanges = mockChanges.filter(change => {
-      if (change.type === 'addition' && change.newValue) {
-        return analyzeDto.schema.includes(Object.keys(change.newValue)[0] || 'email');
-      }
-      return true;
-    });
+    const detectPayload: any = {
+      dialogId,
+      oldApi: oldJsonSchema,
+      newApi: analyzeDto.schema,
+      artifactFormat: 'json-schema',
+    } as any;
 
-    return { changes: filteredChanges };
+    const detected: any = await firstValueFrom(
+      this.changesDetectorClient.send('detect.changes', detectPayload)
+    ) as any;
+
+    const changes: SchemaChangeDto[] = (detected?.changes || []).map((c: any, index: number) => ({
+      id: c.changeId || `change-${index + 1}`,
+      type: Array.isArray(c.type) ? (c.type[0] as any) : (c.type as any),
+      path: c.path,
+      description: c.description,
+      isAcceptable: !!c.isAcceptable,
+      isProblematic: c.isAcceptable === false,
+      groupId: c.groupId ?? undefined,
+    }));
+
+    return { changes };
   }
 
   /**
@@ -164,8 +180,8 @@ export class SpecificationMaintainerService {
     // Simulate processing delay
     await new Promise(resolve => setTimeout(resolve, 1500));
 
-    const acceptedChanges = applyDto.decisions.filter(d => d.decision === 'accept');
-    const spec = await this.getSpecification(applyDto.specificationId);
+    const acceptedChanges: ChangeDecisionDto[] = applyDto.decisions.filter(d => d.decision === 'accept');
+    const spec: SpecificationDto = await this.getSpecification(applyDto.specificationId);
 
     return {
       success: true,
@@ -177,12 +193,12 @@ export class SpecificationMaintainerService {
    * Export developer feedback report
    */
   async exportReport(applyDto: ApplyChangesDto): Promise<{ report: any }> {
-    const spec = await this.getSpecification(applyDto.specificationId);
-    const acceptedChanges = applyDto.decisions.filter(d => d.decision === 'accept');
-    const rejectedChanges = applyDto.decisions.filter(d => d.decision === 'reject');
-    const developerFlags = applyDto.decisions.filter(d => d.decision === 'developer');
+    const spec: SpecificationDto = await this.getSpecification(applyDto.specificationId);
+    const acceptedChanges: ChangeDecisionDto[] = applyDto.decisions.filter(d => d.decision === 'accept');
+    const rejectedChanges: ChangeDecisionDto[] = applyDto.decisions.filter(d => d.decision === 'reject');
+    const developerFlags: ChangeDecisionDto[] = applyDto.decisions.filter(d => d.decision === 'developer');
 
-    const report = {
+    const report: any = {
       specification: {
         id: spec.id,
         name: spec.name,
@@ -213,15 +229,15 @@ export class SpecificationMaintainerService {
    * Generate validation link for developers
    */
   async generateValidationLink(specificationId: string): Promise<{ token: string; url: string }> {
-    const spec = await this.getSpecification(specificationId);
+    const spec: SpecificationDto = await this.getSpecification(specificationId);
     
-    const token = Buffer.from(JSON.stringify({
+    const token: string = Buffer.from(JSON.stringify({
       specificationId: spec.id,
       timestamp: Date.now(),
       validUntil: Date.now() + (7 * 24 * 60 * 60 * 1000) // 7 days
     })).toString('base64');
 
-    const baseUrl = process.env.BASE_URL || 'http://localhost:3101';
+    const baseUrl = process.env.BASE_URL || 'http://localhost:3001';
     const url = `${baseUrl}/validate?token=${token}`;
 
     return { token, url };
@@ -238,7 +254,7 @@ export class SpecificationMaintainerService {
         throw new Error('Token expired');
       }
 
-      const spec = await this.getSpecification(decoded.specificationId);
+      const spec: SpecificationDto = await this.getSpecification(decoded.specificationId);
       
       return {
         valid: true,
@@ -308,62 +324,57 @@ export class SpecificationMaintainerService {
   }
 
   /**
+   * Get all accepted changes from stored analyses
+   */
+  async getAcceptedChanges(): Promise<{ acceptedChanges: AcceptedChangeDto[] }> {
+    const acceptedChanges: AcceptedChangeDto[] = [];
+
+    // Iterate through all stored analyses and extract accepted changes
+    for (const [analysisId, analysis] of this.sharedAnalyses.entries()) {
+      if (analysis.decisions) {
+        const acceptedDecisions = analysis.decisions.filter(d => d.decision === 'accept');
+        
+        for (const decision of acceptedDecisions) {
+          // Find the corresponding change in the analysis
+          const change = analysis.changes.find(c => c.id === decision.changeId);
+          if (change) {
+            acceptedChanges.push({
+              changeId: change.id,
+              analysisId: analysisId,
+              type: change.type,
+              path: change.path,
+              description: change.description,
+              comment: decision.comment,
+              timestamp: analysis.timestamp,
+              oldSchemaName: analysis.oldSchemaName,
+              newSchemaName: analysis.newSchemaName,
+              psmFileName: analysis.psmFileName,
+              suggestion: change.suggestion,
+              rationale: change.rationale,
+            });
+          }
+        }
+      }
+    }
+
+    // Sort by timestamp (most recent first)
+    acceptedChanges.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+    return { acceptedChanges };
+  }
+
+  /**
    * Fetch PSM content from IRI (mock implementation)
    */
   async fetchPsmFromIri(psmIri: string): Promise<{ content: string; name: string }> {
-    // In a real implementation, this would fetch the PSM from the IRI
-    // For now, we'll return a mock PSM content
-    
-    // Extract a meaningful name from the IRI
+    const dataspecerBaseUrl = process.env.DATASPECER_BACKEND_URL || process.env.DATASPECER_API_URL || 'http://dataspecer:80';
+    const content = await firstValueFrom(
+      this.dataspecerAdapterClient.send('get.psm', { dataspecerBaseUrl, iri: psmIri })
+    ) as string;
     const nameMatch = psmIri.match(/([^\/]+)$/);
     const name = nameMatch ? nameMatch[1] : 'psm-schema.json';
-    
-    const mockPsmContent = {
-      "@context": {
-        "pim": "https://ofn.gov.cz/pim/",
-        "rdfs": "http://www.w3.org/2000/01/rdf-schema#"
-      },
-      "@type": "pim:PIMSpecification",
-      "@id": psmIri,
-      "rdfs:label": {
-        "@language": "en",
-        "@value": "Generated PSM Schema"
-      },
-      "pim:entities": [
-        {
-          "@type": "pim:PIMClass",
-          "@id": psmIri + "/user",
-          "rdfs:label": {
-            "@language": "en", 
-            "@value": "User"
-          },
-          "pim:attributes": [
-            {
-              "@type": "pim:PIMAttribute",
-              "@id": psmIri + "/user/email",
-              "rdfs:label": {
-                "@language": "en",
-                "@value": "email"
-              },
-              "pim:datatype": "http://www.w3.org/2001/XMLSchema#string"
-            },
-            {
-              "@type": "pim:PIMAttribute", 
-              "@id": psmIri + "/user/username",
-              "rdfs:label": {
-                "@language": "en",
-                "@value": "username"
-              },
-              "pim:datatype": "http://www.w3.org/2001/XMLSchema#string"
-            }
-          ]
-        }
-      ]
-    };
-
-    return {
-      content: JSON.stringify(mockPsmContent, null, 2),
-      name: name
-    };
+    return { content, name };
   }
+
+
 } 

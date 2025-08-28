@@ -3,12 +3,12 @@ import { DetectedChange } from './detected-changes.dto';
 
 export class SuggestionInputDto {
   @IsString()
-  dialogId: string;
+  public dialogId: string;
 
   @IsArray()
   @ValidateNested({ each: true })
-  changes: DetectedChange[];
+  public changes: DetectedChange[];
 
   @IsString()
-  psm: string;
+  public psm: string;
 } 

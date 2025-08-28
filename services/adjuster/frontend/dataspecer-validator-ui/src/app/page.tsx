@@ -3,7 +3,7 @@
 import { Suspense, useState, useEffect } from 'react'
 import UploadForm from './components/UploadForm'
 import SpecificationMaintainerFlow from './components/SpecificationMaintainerFlow'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 
 function UploadFormWithSuspense() {
   return (
@@ -31,6 +31,7 @@ function SpecificationMaintainerWithSuspense() {
 
 function HomeContent() {
   const searchParams = useSearchParams()
+  const router = useRouter()
   const [mode, setMode] = useState<'developer' | 'maintainer'>('developer')
 
   useEffect(() => {
@@ -53,8 +54,17 @@ function HomeContent() {
           <span className="text-lg text-gray-300">Adjuster</span>
         </div>
         
-        {/* Mode Switch */}
+        {/* Navigation Links */}
         <div className="flex items-center space-x-4">
+          <button
+            onClick={() => router.push('/accepted-changes')}
+            className="px-3 py-1 rounded text-sm transition-colors text-gray-400 hover:text-white hover:bg-zinc-700"
+          >
+            Accepted Changes
+          </button>
+          
+          <div className="border-l border-zinc-600 h-6"></div>
+          
           <span className="text-sm text-gray-400">Mode:</span>
           <div className="flex bg-zinc-700 rounded-lg p-1">
             <button
@@ -82,6 +92,21 @@ function HomeContent() {
       </nav>
       <main className="flex-1 p-8">
         <div className="max-w-4xl mx-auto">
+          {/* Quick Actions Bar */}
+          <div className="mb-6 flex justify-between items-center">
+            <div className="flex space-x-3">
+              <button
+                onClick={() => router.push('/accepted-changes')}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center space-x-2"
+              >
+                <span>View Accepted Changes</span>
+              </button>
+            </div>
+            <div className="text-sm text-gray-400">
+              Quick access to review results
+            </div>
+          </div>
+
           <div className="bg-zinc-800 rounded-lg p-6 shadow-lg">
             {mode === 'developer' ? (
               <UploadFormWithSuspense />

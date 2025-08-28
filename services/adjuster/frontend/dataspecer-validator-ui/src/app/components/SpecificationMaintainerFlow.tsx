@@ -8,7 +8,7 @@ export default function SpecificationMaintainerFlow() {
   const searchParams = useSearchParams()
   
   useEffect(() => {
-    // Redirect to the dedicated page with any search params
+    
     const params = new URLSearchParams(searchParams)
     router.push(`/specification-maintainer?${params.toString()}`)
   }, [router, searchParams])

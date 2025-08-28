@@ -19,21 +19,18 @@ export default function LlmChat({ changes, selectedChangeIds, onClose, isOpen }:
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-  // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' })
     }
   }, [conversation?.messages])
 
-  // Focus textarea when chat opens
   useEffect(() => {
     if (isOpen && textareaRef.current) {
       textareaRef.current.focus()
     }
   }, [isOpen])
 
-  // Auto-resize textarea
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto'
@@ -168,7 +165,7 @@ export default function LlmChat({ changes, selectedChangeIds, onClose, isOpen }:
                   {isStartingChat ? 'Starting Chat...' : 'Start AI Analysis'}
                 </button>
                 {selectedChangeIds.length === 0 && (
-                  <p className="text-sm text-red-400 mt-2">
+                  <p className="text-sm text-red-200 mt-2">
                     Please select at least one change to discuss.
                   </p>
                 )}
@@ -220,7 +217,7 @@ export default function LlmChat({ changes, selectedChangeIds, onClose, isOpen }:
               {/* Input */}
               <div className="p-4 border-t border-zinc-700">
                 {error && (
-                  <div className="mb-3 p-2 bg-red-900 bg-opacity-30 border border-red-600 rounded text-red-400 text-sm">
+                  <div className="mb-3 p-2 bg-red-900 bg-opacity-30 border border-red-600 rounded text-red-200 text-sm">
                     {error}
                   </div>
                 )}

@@ -43,18 +43,36 @@ export class DetectChangesFromIriDto {
 
 export class DetectChangesHybridDto {
   @IsString()
-  dialogId: string;
+  public dialogId: string;
 
   @IsString()
-  psmIri: string;
+  public psmIri: string;
 
   @IsString()
-  oldJsonSchema: string;
+  public oldJsonSchema: string;
 
   @IsString()
-  newJsonSchema: string;
+  public newJsonSchema: string;
 
   @IsOptional()
   @IsString()
-  artifactFormat?: string;
+  public artifactFormat?: string;
+}
+
+export class DetectChangesAutomaticDto {
+  @IsString()
+  public dialogId: string;
+
+  @IsString()
+  public dataSpecificationIri: string;
+
+  @IsString()
+  public psmIri: string;
+
+  @IsString()
+  public newJsonSchema: string;
+
+  @IsOptional()
+  @IsString()
+  public artifactFormat?: string;
 } 

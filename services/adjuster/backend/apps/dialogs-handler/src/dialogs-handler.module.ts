@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ClientsModule, Transport } from '@nestjs/microservices';
 
 import { DialogAmqpController } from './controllers/amqp/dialog/dialog.amqp.controller';
 import { IDialogService } from './services/interfaces/dialog/dialog-service.interface';
@@ -15,6 +16,35 @@ import { LlmChatService } from './services/specification-maintainer/llm-chat.ser
 @Module({
   imports: [
     ConfigModule.forRoot(),
+    ClientsModule.register([
+      {
+        name: 'CHANGES_DETECTOR',
+        transport: Transport.RMQ,
+        options: {
+          urls: [process.env.RABBITMQ_URL || 'amqp://guest:guest@rabbitmq:5672'],
+          queue: 'changes_detector_queue',
+          queueOptions: { durable: true },
+        },
+      },
+      {
+        name: 'CHANGES_SUGGESTER',
+        transport: Transport.RMQ,
+        options: {
+          urls: [process.env.RABBITMQ_URL || 'amqp://guest:guest@rabbitmq:5672'],
+          queue: 'changes_suggester_queue',
+          queueOptions: { durable: true },
+        },
+      },
+      {
+        name: 'DATASPECER_ADAPTER',
+        transport: Transport.RMQ,
+        options: {
+          urls: [process.env.RABBITMQ_URL || 'amqp://guest:guest@rabbitmq:5672'],
+          queue: 'dataspecer_adapter_queue',
+          queueOptions: { durable: true },
+        },
+      },
+    ]),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => {

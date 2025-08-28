@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ChatPromptTemplate } from "@langchain/core/prompts";
+import { PROMPTS } from "@app/common/config/prompts";
 import { ChatOpenAI } from "@langchain/openai";
 import { z } from "zod";
 import { ChatMessageEntity } from '../../entities/chat-message.entity';
@@ -34,21 +35,21 @@ export class SpecificationProcessorService {
 
   private async processDescribeChanges(original: string, updated: string): Promise<string> {
     const model = new ChatOpenAI({
-      model: "gpt-4",
+      model: "gpt-4.1",
       temperature: 0,
       apiKey: process.env.OPENAI_API_KEY,
     });
 
-    const prompt = ChatPromptTemplate.fromTemplate(
-      "Describe the changes made to the artifact. \nOriginal: {original} \nUpdated: {updated}"
-    );
+    const prompt = ChatPromptTemplate.fromTemplate(PROMPTS.specificationProcessor.describeChangesTemplate);
 
     const schema = z.object({
       Changes: z.string().describe("Changes made to the artifact"),
     });
 
-    const chain = prompt.pipe(model.withStructuredOutput(schema));
-    const result = await chain.invoke({ original, updated });
+    // @ts-ignore - suppress deep generic inference in langchain helper
+    const structured1: any = (model as any).withStructuredOutput(schema as any) as any;
+    const chain: any = prompt.pipe(structured1);
+    const result: any = await chain.invoke({ original, updated });
 
     return result.Changes;
   }
@@ -59,35 +60,14 @@ export class SpecificationProcessorService {
     psm: string
   ): Promise<ChatMessageEntity> {
     const model = new ChatOpenAI({
-      model: "gpt-4",
+      model: "gpt-4.1",
       temperature: 0,
       apiKey: process.env.OPENAI_API_KEY,
     });
 
-    const prompt = ChatPromptTemplate.fromTemplate(
-      `You are provided with two JSON schemas.
-      Old JSON schema: {oldSchema}
-      New JSON schema: {newSchema}
-      PSM Artifact: {psm}
+    const prompt: ChatPromptTemplate = ChatPromptTemplate.fromTemplate(PROMPTS.specificationProcessor.schemaDifferencesTemplate);
 
-      Your task is to compare the two schemas and identify the changes between them. There may be alternatives - mark them via 
-      alternativeChangeId, for example - addedProperties in combination with removedProperties vs. changedProperties, 
-      you do not know for sure if it is a complitley new property or just renaming. Also take into account relatedChangeId - 
-      an array of changeId, for example if a new class added, addedClasses will contain chnageId's of 
-      related addedProperties and vice-versa. Describe the changes in a human-readable format.
-      Return a JSON object with array of following properties:
-
-      "addedProperties",
-      "removedProperties",
-      "changedProperties",
-      "addedClasses",
-      "addedConnections",
-      "removedConnections",
-      "removedClasses",
-      "changesDescription"`
-    );
-
-    const schema = z.object({
+    const schema: z.ZodObject = z.object({
       addedProperties: z.array(
         z.object({
           changeId: z.number(),
@@ -159,8 +139,10 @@ export class SpecificationProcessorService {
       changesDescription: z.string(),
     });
 
-    const chain = prompt.pipe(model.withStructuredOutput(schema));
-    const result = await chain.invoke({ oldSchema, newSchema, psm });
+    // @ts-ignore - suppress deep generic inference in langchain helper
+    const structured2: any = (model as any).withStructuredOutput(schema as any) as any;
+    const chain: any = prompt.pipe(structured2);
+    const result: any = await chain.invoke({ oldSchema, newSchema, psm });
 
     const request = await this.requestRepository.save({
       oldApi: oldSchema,
@@ -180,36 +162,22 @@ export class SpecificationProcessorService {
     artifactFormat: string,
     request: ChatMessageEntity
   ) {
-    const model = new ChatOpenAI({
-      model: "gpt-4",
+    const model: ChatOpenAI = new ChatOpenAI({
+      model: "gpt-4.1",
       temperature: 0,
       apiKey: process.env.OPENAI_API_KEY,
     });
 
-    const prompt = ChatPromptTemplate.fromTemplate(
-      `You are provided with a PSM artifact and two API specifications.
-      PSM Artifact: {psm}
-      Old API: {oldApi}
-      New API: {newApi}
-      Action: {action}
-      Artifact Format: {artifactFormat}
+    const prompt: ChatPromptTemplate = ChatPromptTemplate.fromTemplate(PROMPTS.specificationProcessor.definitionsTemplate);
 
-      Your task is to analyze the changes between the old and new API specifications and provide a detailed description of the changes.
-      Focus on identifying:
-      1. Added properties, classes, and connections
-      2. Removed properties, classes, and connections
-      3. Changed properties and their types
-      4. Any structural changes in the API
-
-      Provide a clear and concise description of all changes.`
-    );
-
-    const schema = z.object({
+    const schema: z.ZodObject = z.object({
       description: z.string().describe("Detailed description of changes"),
     });
 
-    const chain = prompt.pipe(model.withStructuredOutput(schema));
-    const result = await chain.invoke({
+    // @ts-ignore - suppress deep generic inference in langchain helper
+    const structured3: any = (model as any).withStructuredOutput(schema as any) as any;
+    const chain = prompt.pipe(structured3);
+    const result: any = await chain.invoke({
       psm,
       oldApi,
       newApi,
@@ -263,12 +231,12 @@ export class SpecificationProcessorService {
     oldApi: string,
     newApi: string
   ) {
-    let attempts = 0;
-    const maxAttempts = 30;
-    const pollInterval = 2000;
+    let attempts: number = 0;
+    const maxAttempts: number = 30;
+    const pollInterval: number = 2000;
 
     while (attempts < maxAttempts) {
-      const response = await fetch(messageUrl);
+      const response: any = await fetch(messageUrl);
       if (!response.ok) {
         throw new Error(`Failed to get message: ${response.statusText}`);
       }

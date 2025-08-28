@@ -1,8 +1,1 @@
-import { Injectable } from '@nestjs/common';
-
-@Injectable()
-export class DataspecerAdapterService {
-  getHello(): string {
-    return 'Hello World!';
-  }
-}
+export { DataspecerAdapterService } from './services/dataspecer.adapter.service';

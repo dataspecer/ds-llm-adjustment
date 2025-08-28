@@ -1,0 +1,180 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: adjuster-postgres
+    environment:
+      POSTGRES_DB: adjuster
+      POSTGRES_USER: adjuster
+      POSTGRES_PASSWORD: adjuster123
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U adjuster"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - adjuster-network
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: adjuster-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD-SHELL", "rabbitmq-diagnostics -q ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - adjuster-network
+
+  dataspecer:
+    build:
+      context: ../../
+      dockerfile: Dockerfile
+    ports:
+      - "3002:80"
+    environment:
+      - BASE_URL=http://localhost:3000
+    volumes:
+      - ../../database:/usr/src/app/database
+    networks:
+      - adjuster-network
+
+  dialogs-handler:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+      args:
+        APP_NAME: dialogs-handler
+    image: adjuster-backend:dialogs-handler
+    container_name: dialogs-handler
+    environment:
+      NODE_ENV: production
+      PORT: 3100
+      DATABASE_URL: postgresql://adjuster:adjuster123@postgres:5432/adjuster
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+    command: ["node", "dist/apps/dialogs-handler/main.js"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    ports:
+      - "3100:3100"
+    networks:
+      - adjuster-network
+
+  changes-detector:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+      args:
+        APP_NAME: changes-detector
+    image: adjuster-backend:changes-detector
+    container_name: changes-detector
+    environment:
+      NODE_ENV: production
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
+      DATASPECER_BACKEND_URL: ${DATASPECER_BACKEND_URL:-http://dataspecer:80}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+    command: ["node", "dist/apps/changes-detector/main.js"]
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    ports:
+      - "3101:3101"
+    networks:
+      - adjuster-network
+
+  changes-suggester:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+      args:
+        APP_NAME: changes-suggester
+    image: adjuster-backend:changes-suggester
+    container_name: changes-suggester
+    environment:
+      NODE_ENV: production
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+    command: ["node", "dist/apps/changes-suggester/main.js"]
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    ports:
+      - "3102:3102"
+    networks:
+      - adjuster-network
+
+  dataspecer-adapter:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+      args:
+        APP_NAME: dataspecer-adapter
+    image: adjuster-backend:dataspecer-adapter
+    container_name: dataspecer-adapter
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:2999}
+    command: ["node", "dist/apps/dataspecer-adapter/main.js"]
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    ports:
+      - "3104:3000"
+    networks:
+      - adjuster-network
+
+  frontend:
+    build:
+      context: ./frontend/dataspecer-validator-ui
+      dockerfile: Dockerfile.prod
+    image: adjuster-frontend:prod
+    container_name: dataspecer-validator-ui
+    environment:
+      NEXT_PUBLIC_CHANGES_DETECTOR_URL: ${NEXT_PUBLIC_CHANGES_DETECTOR_URL:-http://localhost:3000/detector}
+      NEXT_PUBLIC_CHANGES_SUGGESTER_URL: ${NEXT_PUBLIC_CHANGES_SUGGESTER_URL:-http://localhost:3000/suggester}
+      NEXT_PUBLIC_DIALOG_HANDLER_URL: ${NEXT_PUBLIC_DIALOG_HANDLER_URL:-http://localhost:3000/dialogs-handler}
+      NEXT_PUBLIC_DATASPECER_BACKEND: ${NEXT_PUBLIC_DATASPECER_BACKEND:-http://localhost:3000/dataspecer}
+    depends_on:
+      - changes-detector
+      - changes-suggester
+      - dialogs-handler
+    networks:
+      - adjuster-network
+
+  nginx:
+    image: nginx:alpine
+    container_name: adjuster-nginx
+    depends_on:
+      - frontend
+      - dialogs-handler
+      - changes-detector
+      - changes-suggester
+      - dataspecer-adapter
+    volumes:
+      - ./reverseproxy/nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "3000:3000"
+    networks:
+      - adjuster-network
+
+volumes:
+  postgres_data:
+
+networks:
+  adjuster-network:
+    driver: bridge

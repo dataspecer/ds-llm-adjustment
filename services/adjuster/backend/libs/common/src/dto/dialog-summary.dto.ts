@@ -4,17 +4,17 @@ import { Suggestion } from "./suggestions.dto";
 
 export class DialogSummaryDto {
     @IsString()
-    dialogId: string;
+    public dialogId: string;
   
     @IsArray()
     @ValidateNested({ each: true })
-    changes: DetectedChange[];
+    public changes: DetectedChange[];
   
     @IsArray()
     @ValidateNested({ each: true })
-    suggestions: Suggestion[];
+    public suggestions: Suggestion[];
   
     @IsOptional()
     @IsString()
-    status?: string;
+    public status?: string;
   }

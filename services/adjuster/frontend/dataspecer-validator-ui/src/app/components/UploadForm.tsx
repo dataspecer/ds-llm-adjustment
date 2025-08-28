@@ -15,10 +15,10 @@ export default function UploadForm() {
   const [psm, setPsm] = useState<FileState>({ content: null, name: null });
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [useAutomatic, setUseAutomatic] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // Check if PSM IRI is provided via query parameter
   const psmIri = searchParams.get('data-psm-schema');
   const dataSpecificationIri = searchParams.get('data-specification');
   const isIriMode = !!psmIri && !!dataSpecificationIri;
@@ -54,8 +54,19 @@ export default function UploadForm() {
       
       let changesResponse;
       
-      if (isIriMode) {
-        // Use hybrid approach - PSM via IRI, old and new schemas manually uploaded
+      if (useAutomatic && isIriMode) {
+        if (!newApi.content) {
+          setError('Please upload the new JSON schema.');
+          return;
+        }
+        
+        if (!psmIri || !dataSpecificationIri) {
+          setError('Missing PSM schema IRI or data specification IRI in URL parameters.');
+          return;
+        }
+        
+        changesResponse = await api.detectChangesAutomatic(dataSpecificationIri, psmIri, newApi.content, dialogId);
+      } else if (isIriMode) {
         if (!oldApi.content || !newApi.content) {
           setError('Please upload both old and new JSON schemas.');
           return;
@@ -66,10 +77,8 @@ export default function UploadForm() {
           return;
         }
         
-        // Use detectChangesHybrid endpoint - PSM via IRI, schemas manually uploaded
         changesResponse = await api.detectChangesHybrid(psmIri, oldApi.content, newApi.content, dialogId);
       } else {
-        // Use traditional file upload approach
         if (!oldApi.content || !newApi.content || !psm.content) {
           setError('Please upload all required files.');
           return;
@@ -95,7 +104,7 @@ export default function UploadForm() {
 
       const suggestionsResponse = await api.getSuggestions(
         changesResponse.data,
-        psm.content || '' // PSM content handled by backend for IRI mode
+        psm.content || '' 
       );
 
       if (suggestionsResponse.error) {
@@ -124,20 +133,23 @@ export default function UploadForm() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div>
-        <label className="block text-sm font-medium text-gray-300 mb-1">
-          Old JSON Schema
-        </label>
-        <input
-          type="file"
-          accept=".json"
-          onChange={(e) => handleFileChange(e, setOldApi)}
-          className="block w-full text-sm text-gray-200 file:bg-zinc-700 file:border-none file:px-4 file:py-2 file:rounded file:text-white hover:file:bg-zinc-600"
-        />
-        {oldApi.name && (
-          <p className="text-sm text-gray-400 mt-1">Selected: {oldApi.name}</p>
-        )}
-      </div>
+
+      {!(useAutomatic && isIriMode) && (
+        <div>
+          <label className="block text-sm font-medium text-gray-300 mb-1">
+            Old JSON Schema
+          </label>
+          <input
+            type="file"
+            accept=".json"
+            onChange={(e) => handleFileChange(e, setOldApi)}
+            className="block w-full text-sm text-gray-200 file:bg-zinc-700 file:border-none file:px-4 file:py-2 file:rounded file:text-white hover:file:bg-zinc-600"
+          />
+          {oldApi.name && (
+            <p className="text-sm text-gray-400 mt-1">Selected: {oldApi.name}</p>
+          )}
+        </div>
+      )}
 
       {!isIriMode && (
         <div>
@@ -171,11 +183,15 @@ export default function UploadForm() {
         )}
       </div>
 
-      {error && <p className="text-red-400 text-sm">{error}</p>}
+      {error && <p className="text-red-200 text-sm">{error}</p>}
 
       <button
         type="submit"
-        disabled={isLoading || (!oldApi.content || !newApi.content || (!isIriMode && !psm.content))}
+        disabled={isLoading || (
+          useAutomatic && isIriMode ? 
+            !newApi.content :
+            (!oldApi.content || !newApi.content || (!isIriMode && !psm.content))
+        )}
         className="w-full text-white px-4 py-2 rounded transition disabled:cursor-not-allowed"
         style={{ background: isLoading ? '#636E83' : '#636E83' }}
       >
