@@ -213,7 +213,7 @@ LOV is not also integrated on the current stage, but it is planned for future re
 - **NestJS**: A progressive Node.js framework for building efficient and scalable server-side applications.
 - **TypeScript**: A strongly typed programming language that builds on JavaScript, providing better tooling and error checking.
 - **PostgreSQL**: An open-source relational database management system used for data storage.
-- **Prisma**: An ORM (Object-Relational Mapping) tool that simplifies database access and management.
+- **TypeORM**: An ORM (Object-Relational Mapping) tool that simplifies database access and management.
 - **RabbitMQ**: A message broker that facilitates communication between microservices.
 - **OpenAI GPT Models**: Used for generating suggestions, rationales, and facilitating chat interactions.
 - **LangChain**: A framework for developing applications powered by language models, used to integrate with OpenAI. 
@@ -225,7 +225,7 @@ LOV is not also integrated on the current stage, but it is planned for future re
 ### Technologies choice rationale
 Dataspecer itself is developed on NodeJS and TypeScript, so using NestJS for the backend services ensures consistency in the technology stack. NestJS provides a modular architecture that is well-suited for building microservices, making it easier to manage and scale the application. Potentially other languages and frameworks could be used because of performance, more robust parallel computing (e.g.,C# + .NET, Java + Spring Boot or C++ + Boost), but that would introduce additional complexity in terms of deployment and maintenance.
 
-PostgreSQL is chosen for its robustness, scalability, and strong support for complex queries, which is essential for managing the structured data involved in schema changes and suggestions. Prisma simplifies database interactions with its type-safe query capabilities, reducing the likelihood of runtime errors.
+PostgreSQL is chosen for its robustness, scalability, and strong support for complex queries, which is essential for managing the structured data involved in schema changes and suggestions, and, what is important, because it is Open Source. TypeORM is used to simplify database interactions and provide a higher-level abstraction for working with the database instead of Prisma, which is also a good option, but TypeORM os simplier and is enough for the project needs.
 
 RabbitMQ is used for its reliability and support for complex messaging patterns, which is crucial for the asynchronous communication between microservices. OpenAI GPT models are selected for their advanced natural language processing capabilities, enabling the generation of meaningful suggestions and rationales. LangChain is used to streamline the integration with OpenAI, providing a higher-level abstraction for working with language models.
 
@@ -267,6 +267,18 @@ To run the Dataspecer Adjuster service locally, follow these steps:
     ```
 
     depending on your Docker installation.
+
+    Sometimes build of the Dataspecer itself can fail because of the memory - in this case try to kill some other processes or increase the memory limit in Docker settings, and run 
+
+    ```bash
+    docker compose -f docker-compose.prod.yml build dataspecer
+    ```
+    or
+
+    ```bash
+    docker-compose -f docker-compose.prod.yml build dataspecer
+    ```
+    separately first, and then run the full command again.
 4. The services will be accessible at the following ports:
    - Dialogs Handler: `http://localhost:3100`
    - Changes Detector: `http://localhost:3101`
@@ -482,6 +494,10 @@ The tests cover mian scenarios of communicating with each microservice separatel
 
 To run the tests, navigate to the `services/adjuster/backend` directory and execute the following commands:
 ```bash
+npm install
+```
+
+```bash
 npm run test:e2e:dialogs
 ```
 ```bash
@@ -504,7 +520,7 @@ During the implementation, AI-powered IDEs like VS Code + GitHub Copilot and Cur
 
 - Generating boilerplate code for NestJS controllers and services.
 - Improving prompts for LLM interactions.
-- Writing integration tests after the main logic was implemented - based on author's description of the functionality and design.
-- Refactoring existing code for better readability and maintainability.
+- Writing integration tests after the main logic was implemented - based on author's description of the functionality and design and base authors code.
+- Refactoring existing code for better readability and maintainability (mainly lines, spaces, methods separation, names consistency).
 
 All AI-generated content was reviewed and modified by the student to ensure accuracy and relevance to the project requirements. Design of the project - architecture, data models, APIs, core services logics and overall functionality - was solely the work of the student.

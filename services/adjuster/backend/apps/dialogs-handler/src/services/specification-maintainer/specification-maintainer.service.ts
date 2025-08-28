@@ -1,6 +1,8 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
 import { firstValueFrom } from 'rxjs';
+import { Repository } from 'typeorm';
+import { InjectRepository } from '@nestjs/typeorm';
 import { SpecificationDto } from '../../dto/specification.dto';
 import { AnalyzeSchemaDto } from '../../dto/analyze-schema.dto';
 import { SchemaChangeDto } from '../../dto/schema-change.dto';
@@ -9,6 +11,7 @@ import { ChangeDecisionDto } from '../../dto/change-decision.dto';
 import { SharedAnalysisDto } from '../../dto/shared-analysis.dto';
 import { StoreAnalysisDto } from '../../dto/store-analysis.dto';
 import { AcceptedChangeDto } from '../../dto/accepted-change.dto';
+import { SharedAnalysisEntity } from '../../entities/shared-analysis.entity';
 
 @Injectable()
 export class SpecificationMaintainerService {
@@ -16,6 +19,8 @@ export class SpecificationMaintainerService {
   constructor(
     @Inject('CHANGES_DETECTOR') private readonly changesDetectorClient: ClientProxy,
     @Inject('DATASPECER_ADAPTER') private readonly dataspecerAdapterClient: ClientProxy,
+    @InjectRepository(SharedAnalysisEntity)
+    private readonly sharedAnalysesRepo: Repository<SharedAnalysisEntity>,
   ) {}
   // Mock specifications data
   private readonly mockSpecifications: SpecificationDto[] = [
@@ -57,8 +62,7 @@ export class SpecificationMaintainerService {
     }
   ];
 
-  // In-memory storage for shared analyses (in production, use a database)
-  private readonly sharedAnalyses = new Map<string, SharedAnalysisDto>();
+  // Shared analyses are persisted in Postgres via TypeORM repository
 
   /**
    * Get list of specifications (mock implementation)
@@ -285,81 +289,78 @@ export class SpecificationMaintainerService {
    * Store analysis results for sharing
    */
   async storeAnalysis(storeDto: StoreAnalysisDto): Promise<{ success: boolean; shareUrl: string }> {
-    const sharedAnalysis: SharedAnalysisDto = {
+    const entity: SharedAnalysisEntity = this.sharedAnalysesRepo.create({
       analysisId: storeDto.analysisId,
       oldSchemaName: storeDto.oldSchemaName,
       newSchemaName: storeDto.newSchemaName,
       psmFileName: storeDto.psmFileName,
-      changes: storeDto.changes,
+      changes: storeDto.changes as unknown as object[],
       schema: storeDto.schema,
-      decisions: storeDto.decisions,
-      timestamp: new Date().toISOString()
-    };
+      decisions: (storeDto.decisions ?? undefined) as unknown as object[] | undefined,
+      timestamp: new Date(),
+    });
 
-    // Store the analysis
-    this.sharedAnalyses.set(storeDto.analysisId, sharedAnalysis);
-
-    // In production, you would store this in a database and clean up old entries
-    // For now, we'll just keep them in memory
+    await this.sharedAnalysesRepo.save(entity);
 
     const shareUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/shared/${storeDto.analysisId}`;
 
-    return {
-      success: true,
-      shareUrl
-    };
+    return { success: true, shareUrl };
   }
 
   /**
    * Retrieve shared analysis results
    */
   async getSharedAnalysis(analysisId: string): Promise<SharedAnalysisDto> {
-    const analysis = this.sharedAnalyses.get(analysisId);
-    
-    if (!analysis) {
+    const entity = await this.sharedAnalysesRepo.findOne({ where: { analysisId } });
+    if (!entity) {
       throw new Error(`Shared analysis with ID ${analysisId} not found or has expired`);
     }
-
-    return analysis;
+    const dto: SharedAnalysisDto = {
+      analysisId: entity.analysisId,
+      oldSchemaName: entity.oldSchemaName,
+      newSchemaName: entity.newSchemaName,
+      psmFileName: entity.psmFileName,
+      changes: entity.changes as any,
+      schema: entity.schema,
+      decisions: (entity.decisions ?? undefined) as any,
+      timestamp: (entity.timestamp instanceof Date ? entity.timestamp.toISOString() : new Date(entity.timestamp as any).toISOString()),
+      sharedBy: entity.sharedBy ?? undefined,
+    };
+    return dto;
   }
 
   /**
    * Get all accepted changes from stored analyses
    */
   async getAcceptedChanges(): Promise<{ acceptedChanges: AcceptedChangeDto[] }> {
+    const rows = await this.sharedAnalysesRepo.find();
     const acceptedChanges: AcceptedChangeDto[] = [];
 
-    // Iterate through all stored analyses and extract accepted changes
-    for (const [analysisId, analysis] of this.sharedAnalyses.entries()) {
-      if (analysis.decisions) {
-        const acceptedDecisions = analysis.decisions.filter(d => d.decision === 'accept');
-        
-        for (const decision of acceptedDecisions) {
-          // Find the corresponding change in the analysis
-          const change = analysis.changes.find(c => c.id === decision.changeId);
-          if (change) {
-            acceptedChanges.push({
-              changeId: change.id,
-              analysisId: analysisId,
-              type: change.type,
-              path: change.path,
-              description: change.description,
-              comment: decision.comment,
-              timestamp: analysis.timestamp,
-              oldSchemaName: analysis.oldSchemaName,
-              newSchemaName: analysis.newSchemaName,
-              psmFileName: analysis.psmFileName,
-              suggestion: change.suggestion,
-              rationale: change.rationale,
-            });
-          }
+    for (const row of rows) {
+      const decisions: ChangeDecisionDto[] = (row.decisions as any) || [];
+      const accepted = decisions.filter(d => d.decision === 'accept');
+      for (const decision of accepted) {
+        const change = (row.changes as any[]).find(c => c.id === decision.changeId);
+        if (change) {
+          acceptedChanges.push({
+            changeId: change.id,
+            analysisId: row.analysisId,
+            type: change.type,
+            path: change.path,
+            description: change.description,
+            comment: decision.comment,
+            timestamp: (row.timestamp instanceof Date ? row.timestamp.toISOString() : new Date(row.timestamp as any).toISOString()),
+            oldSchemaName: row.oldSchemaName,
+            newSchemaName: row.newSchemaName,
+            psmFileName: row.psmFileName,
+            suggestion: change.suggestion,
+            rationale: change.rationale,
+          });
         }
       }
     }
 
-    // Sort by timestamp (most recent first)
     acceptedChanges.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-
     return { acceptedChanges };
   }
 

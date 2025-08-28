@@ -7,6 +7,7 @@ import { DialogAmqpController } from './controllers/amqp/dialog/dialog.amqp.cont
 import { IDialogService } from './services/interfaces/dialog/dialog-service.interface';
 import { DialogService } from './services/dialog/dialog.service';
 import { ChatMessageEntity } from './entities/chat-message.entity';
+import { SharedAnalysisEntity } from './entities/shared-analysis.entity';
 import { SpecificationDialogController } from './controllers/http/specification-dialog/specification-dialog.controller';
 import { SpecificationProcessorService } from './services/specification-processor/specification-processor.service';
 import { SpecificationMaintainerController } from './controllers/http/specification-maintainer/specification-maintainer.controller';
@@ -52,7 +53,7 @@ import { LlmChatService } from './services/specification-maintainer/llm-chat.ser
         return {
           type: 'postgres',
           url: databaseUrl,
-          entities: [ChatMessageEntity],
+          entities: [ChatMessageEntity, SharedAnalysisEntity],
           synchronize: true,
           logging: configService.get('NODE_ENV') === 'development',
           ssl: false,
@@ -64,7 +65,7 @@ import { LlmChatService } from './services/specification-maintainer/llm-chat.ser
       },
       inject: [ConfigService],
     }),
-    TypeOrmModule.forFeature([ChatMessageEntity])
+    TypeOrmModule.forFeature([ChatMessageEntity, SharedAnalysisEntity])
   ],
   controllers: [DialogAmqpController, SpecificationDialogController, SpecificationMaintainerController],
   providers: [
