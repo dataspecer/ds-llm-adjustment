@@ -1,6 +1,6 @@
-import axios, { AxiosResponse } from 'axios';
 import * as AdmZip from 'adm-zip';
 import { DataspecerAdapterServiceInterface } from '@interfaces/dataspecer.adapter.service.interface';
+import { McpHttpClient } from '@app/common/mcp/client';
 
 export class DataspecerAdapterService implements DataspecerAdapterServiceInterface {
   public getHello(): string {
@@ -8,87 +8,38 @@ export class DataspecerAdapterService implements DataspecerAdapterServiceInterfa
   }
 
   public async getPsm(dataspecerBaseUrl: string, iri: string): Promise<string> {
+    const client = this.createClient();
+    const result = await client.callTool<any>('dataspecer.get_resource_blob', { iri });
+    const text: string = result?.content?.[0]?.text ?? '';
+    if (!text) throw new Error('Empty PSM content');
+    // normalize JSON formatting if possible
     try {
-      const url: string = `${dataspecerBaseUrl}/api/resources/blob?iri=${encodeURIComponent(iri)}`;
-      console.log('url', url);
-      const response: AxiosResponse = await axios.get(url, { responseType: 'text', validateStatus: () => true });
-
-      if (response.status < 200 || response.status >= 300) {
-        const errorText: string = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
-        throw new Error(`Failed to fetch PSM schema: ${response.status} ${response.statusText}. Response: ${errorText}`);
-      }
-
-      const responseText: string = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
-      try {
-        const psmData: any = JSON.parse(responseText);
-        return JSON.stringify(psmData, null, 2);
-      } catch (parseError) {
-        // If it is already JSON text, return as-is; otherwise, bubble up
-        try {
-          JSON.parse(responseText);
-          return responseText;
-        } catch {
-          throw new Error(`PSM API returned invalid JSON: ${(parseError as Error).message}`);
-        }
-      }
-    } catch (error: any) {
-      throw new Error(`Failed to get PSM from Dataspecer: ${error.message}`);
+      const obj = JSON.parse(text);
+      return JSON.stringify(obj, null, 2);
+    } catch {
+      return text;
     }
   }
 
   public async getZipExport(dataspecerBaseUrl: string, iri: string): Promise<Buffer> {
-    try {
-      const url: string = `${dataspecerBaseUrl}/resources/export.zip?iri=${encodeURIComponent(iri)}`;
-      const response: AxiosResponse = await axios.get(url, { responseType: 'arraybuffer' });
-      return Buffer.from(response.data);
-    } catch (error) {
-      throw new Error(`Failed to get zip export from Dataspecer: ${error.message}`);
-    }
+    const client = this.createClient();
+    const result = await client.callTool<any>('dataspecer.get_zip_export', { iri });
+    const b64: string | undefined = result?.content?.[0]?.data;
+    if (!b64) throw new Error('Empty zip content');
+    return Buffer.from(b64, 'base64');
   }
 
   public async getJsonSchemaViaDsv(dataspecerBaseUrl: string, dataSpecificationIri: string, psmIri?: string): Promise<string> {
-    try {
-      const htmlDocUrl: string = `${dataspecerBaseUrl}/api/preview/index.html?iri=${encodeURIComponent(dataSpecificationIri)}`;
-      const response: AxiosResponse = await axios.get(htmlDocUrl, { responseType: 'text', validateStatus: () => true });
-
-      if (response.status < 200 || response.status >= 300) {
-        const errorText: string = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
-        throw new Error(`Failed to fetch HTML documentation: ${response.status} ${response.statusText}. Response: ${errorText}`);
-      }
-
-      const htmlContent: string = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
-      const metadata: any = this.extractMetadataFromHtml(htmlContent);
-      if (!metadata) {
-        throw new Error('No embedded metadata found in HTML documentation');
-      }
-
-      const jsonSchemaUrl: string | null = this.findJsonSchemaUrl(metadata);
-      if (!jsonSchemaUrl) {
-        throw new Error('No JSON schema found in DSV metadata');
-      }
-
-      const schemaResponse: AxiosResponse = await axios.get(jsonSchemaUrl, { responseType: 'text', validateStatus: () => true });
-      if (schemaResponse.status < 200 || schemaResponse.status >= 300) {
-        const errorText: string = typeof schemaResponse.data === 'string' ? schemaResponse.data : JSON.stringify(schemaResponse.data);
-        throw new Error(`Failed to fetch JSON schema from URL: ${schemaResponse.status} ${schemaResponse.statusText}. Response: ${errorText}`);
-      }
-
-      const jsonSchema: string = typeof schemaResponse.data === 'string' ? schemaResponse.data : JSON.stringify(schemaResponse.data);
-      return jsonSchema;
-    } catch (error: any) {
-      return this.getJsonSchemaOld(dataspecerBaseUrl, dataSpecificationIri, psmIri);
-    }
+    const client = this.createClient();
+    const result = await client.callTool<any>('dataspecer.get_json_schema', { dataSpecificationIri, psmIri });
+    const text: string = result?.content?.[0]?.text ?? '';
+    if (!text) throw new Error('Empty schema content');
+    return text;
   }
 
   private async getJsonSchemaOld(dataspecerBaseUrl: string, dataSpecificationIri: string, psmIri?: string): Promise<string> {
-    const baseUrl: string = `${dataspecerBaseUrl}/api/preview/schema.json?iri=${encodeURIComponent(dataSpecificationIri)}`;
-    const url: string = psmIri ? `${baseUrl}&psm=${encodeURIComponent(psmIri)}` : baseUrl;
-    const response: AxiosResponse = await axios.get(url, { responseType: 'text', validateStatus: () => true });
-    if (response.status < 200 || response.status >= 300) {
-      const errorText: string = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
-      throw new Error(`Failed to generate JSON schema: ${response.status} ${response.statusText}. Response: ${errorText}`);
-    }
-    return typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
+    // Fallback to REST (legacy) if MCP not available
+    throw new Error('Legacy REST fallback disabled: MCP required');
   }
 
   private extractMetadataFromHtml(html: string): any | null {
@@ -147,5 +98,11 @@ export class DataspecerAdapterService implements DataspecerAdapterServiceInterfa
     } catch {
       return null;
     }
+  }
+
+  private createClient(): McpHttpClient {
+    const baseUrl = process.env.DATASPECER_MCP_BASE_URL || 'http://dataspecer/api/mcp';
+    const authToken = process.env.DATASPECER_MCP_TOKEN || process.env.MCP_AUTH_SECRET;
+    return new McpHttpClient({ baseUrl, authToken });
   }
 }

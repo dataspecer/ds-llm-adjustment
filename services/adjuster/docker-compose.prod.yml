@@ -56,6 +56,9 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3100
+      MCP_ENABLED: "1"
+      MCP_BASE_PATH: "/api/mcp"
+      MCP_AUTH_SECRET: ${MCP_AUTH_SECRET:-}
       DATABASE_URL: postgresql://adjuster:adjuster123@postgres:5432/adjuster
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
@@ -127,6 +130,8 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3000
+      DATASPECER_MCP_BASE_URL: http://dataspecer/api/mcp
+      DATASPECER_MCP_TOKEN: ${MCP_AUTH_SECRET:-}
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:2999}
     command: ["node", "dist/apps/dataspecer-adapter/main.js"]

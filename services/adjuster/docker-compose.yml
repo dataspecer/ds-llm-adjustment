@@ -10,6 +10,9 @@ services:
       - "3002:80"
     environment:
       - BASE_URL=http://localhost
+      - MCP_ENABLED=1
+      - MCP_BASE_PATH=/api/mcp
+      - MCP_AUTH_SECRET=1234567890
     volumes:
       - ../../database:/usr/src/app/database
     networks:
@@ -95,6 +98,9 @@ services:
     environment:
       - NODE_ENV=development
       - PORT=3100
+      - MCP_ENABLED=1
+      - MCP_BASE_PATH=/api/mcp
+      - MCP_AUTH_SECRET=1234567890
       - DATABASE_URL=postgresql://adjuster:adjuster123@postgres:5432/adjuster
       - RABBITMQ_URL=amqp://rabbitmq:5672
       - RABBITMQ_USER=guest
@@ -122,6 +128,8 @@ services:
     environment:
       - NODE_ENV=development
       - PORT=3000
+      - DATASPECER_MCP_BASE_URL=http://dataspecer/api/mcp
+      - DATASPECER_MCP_TOKEN=1234567890
       - RABBITMQ_URL=amqp://rabbitmq:5672
       - RABBITMQ_USER=guest
       - RABBITMQ_PASSWORD=guest

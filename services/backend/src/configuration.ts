@@ -37,6 +37,15 @@ export interface Configuration {
 
     // Generator configuraion
     configuration: object;
+
+    /**
+     * Optional Model Context Protocol server configuration.
+     */
+    mcp?: {
+        enabled?: boolean;
+        basePath?: string;
+        authSecret?: string;
+    };
 }
 
 const defaultConfiguration = {
@@ -60,6 +69,10 @@ const defaultConfiguration = {
             en: "Local models"
         },
     },
+
+    mcp: {
+        enabled: false,
+    },
 } as Partial<Configuration>
 
 const envConfiguration = {} as Partial<Configuration>;
@@ -74,6 +87,22 @@ if (process.env.STATIC_FILES_PATH) {
 }
 if (process.env.PORT) {
     envConfiguration.port = Number(process.env.PORT);
+}
+
+// MCP configuration from environment
+const envMcp: NonNullable<Configuration["mcp"]> = {};
+if (process.env.MCP_ENABLED) {
+    envMcp.enabled = ["1", "true", "yes"].includes(String(process.env.MCP_ENABLED).toLowerCase());
+}
+if (process.env.MCP_BASE_PATH) {
+    envMcp.basePath = process.env.MCP_BASE_PATH;
+}
+if (process.env.MCP_AUTH_SECRET) {
+    envMcp.authSecret = process.env.MCP_AUTH_SECRET;
+}
+if (Object.keys(envMcp).length > 0) {
+    const currentMcp = (envConfiguration.mcp ?? {}) as NonNullable<Configuration["mcp"]>;
+    envConfiguration.mcp = { ...currentMcp, ...envMcp };
 }
 
 export default ({...defaultConfiguration, ...configuration, ...envConfiguration} as Configuration);
