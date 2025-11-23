@@ -46,6 +46,8 @@ export interface Configuration {
         basePath?: string;
         authSecret?: string;
     };
+    // Whether the server is running in Docker
+    inDocker: boolean;
 }
 
 const defaultConfiguration = {
@@ -88,6 +90,7 @@ if (process.env.STATIC_FILES_PATH) {
 if (process.env.PORT) {
     envConfiguration.port = Number(process.env.PORT);
 }
+envConfiguration.inDocker = process.env.DOCKER === "1";
 
 // MCP configuration from environment
 const envMcp: NonNullable<Configuration["mcp"]> = {};
