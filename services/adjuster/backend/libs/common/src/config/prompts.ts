@@ -30,7 +30,7 @@ const defaultPrompts: PromptsConfig = {
   },
   changesSuggester: {
     suggestionsTemplate:
-      "You are provided with a list of changes detected in an API specification and a PSM context (selected relevant chunks).\nChanges (JSON): {changes}\nPSM context: {psm}\n\nFor each change, provide:\n- A suggestion for how to handle the change\n- A rationale explaining why this suggestion is appropriate\n\nConstraints:\n- Keep responses concise and actionable\n- Assume the PSM text may be truncated; do not rely on missing context\n\nConsider:\n1. Impact on existing systems\n2. Backward compatibility\n3. Best practices for API design",
+      "You are provided with a list of changes detected in an API specification, a PSM context (selected relevant chunks), and (optionally) an ontology context in RDF/OWL.\nChanges (JSON): {changes}\nPSM context: {psm}\nOntology context (RDF/OWL): {ontology}\n\nFor each change, provide:\n- A suggestion for how to handle the change\n- A rationale explaining why this suggestion is appropriate\n\nConstraints:\n- Keep responses concise and actionable\n- Assume the PSM or ontology text may be truncated; do not rely on missing context\n\nConsider:\n1. Impact on existing systems\n2. Backward compatibility\n3. Best practices for API design\n4. RDFS/OWL semantics (e.g., rdfs:domain, rdfs:range, rdfs:subClassOf, owl:cardinality, FunctionalProperty); ensure suggestions respect these when relevant",
   },
   specificationProcessor: {
     describeChangesTemplate:

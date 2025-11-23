@@ -1,4 +1,4 @@
-import { IsString, IsArray, ValidateNested } from 'class-validator';
+import { IsString, IsArray, ValidateNested, IsOptional } from 'class-validator';
 import { DetectedChange } from './detected-changes.dto';
 
 export class SuggestionInputDto {
@@ -11,4 +11,8 @@ export class SuggestionInputDto {
 
   @IsString()
   public psm: string;
+
+  @IsOptional()
+  @IsString()
+  public ontology?: string;
 } 

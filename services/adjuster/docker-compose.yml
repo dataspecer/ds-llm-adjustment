@@ -146,6 +146,37 @@ services:
       - adjuster-network
     command: npm run start:dev dataspecer-adapter
 
+  artifacts-embedder:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "3103:3103"
+    environment:
+      - NODE_ENV=development
+      - PORT=3103
+      - RABBITMQ_URL=amqp://rabbitmq:5672
+      - RABBITMQ_USER=guest
+      - RABBITMQ_PASSWORD=guest
+      - CORS_ORIGIN=http://localhost:3001
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - QDRANT_URL=http://qdrant:6333
+      - QDRANT_COLLECTION=artifacts
+      - QDRANT_VECTOR_SIZE=1536
+      - DATASPECER_BACKEND_URL=http://dataspecer:80
+    env_file:
+      - .env
+    depends_on:
+      - rabbitmq
+      - qdrant
+      - dataspecer
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    networks:
+      - adjuster-network
+    command: npm run start:dev artifacts-embedder
+
   postgres:
     image: postgres:15
     container_name: adjuster-postgres
@@ -178,10 +209,21 @@ services:
     networks:
       - adjuster-network
 
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    networks:
+      - adjuster-network
+
 volumes:
   rabbitmq_data:
     driver: local
   postgres_data:
+    driver: local
+  qdrant_storage:
     driver: local
 
 networks:

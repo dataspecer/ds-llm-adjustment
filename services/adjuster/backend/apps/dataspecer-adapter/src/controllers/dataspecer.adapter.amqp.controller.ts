@@ -30,4 +30,19 @@ export class DataspecerAdapterAmqpController {
       payload.psmIri,
     );
   }
+
+  @MessagePattern('dataspecer.get.owl')
+  async getLightweightOwl(@Payload() payload: { iri: string }): Promise<string> {
+    return this.dataspecerAdapterService.getLightweightOwlTtl(payload.iri);
+  }
+
+  @MessagePattern('dataspecer.preview.apply')
+  async previewApply(@Payload() payload: { operations: Array<{ op: string; args: any }>, token?: string }): Promise<{ planId: string; report: { ok: boolean; issues: Array<{ level: string; message: string }> } }> {
+    return this.dataspecerAdapterService.previewApply(payload.operations, payload.token);
+  }
+
+  @MessagePattern('dataspecer.apply.changes')
+  async applyChanges(@Payload() payload: { planId: string, token?: string }): Promise<{ applied: boolean; changedIris: string[] }> {
+    return this.dataspecerAdapterService.applyChanges(payload.planId, payload.token);
+  }
 } 

@@ -32,6 +32,51 @@ export interface SuggestionsDto {
   suggestions: Suggestion[];
 }
 
+// ===== Evaluation DTOs =====
+export type EvalChangeKind = 'addition' | 'removal' | 'modify' | 'rename' | 'type-change';
+
+export interface EvalTypedChangeRef {
+  id: string;
+  type: EvalChangeKind;
+  path: string;
+}
+
+export interface EvalPerTypeScores {
+  type: EvalChangeKind;
+  truePositives: number;
+  falsePositives: number;
+  falseNegatives: number;
+  precision: number;
+  recall: number;
+  f1: number;
+}
+
+export interface DiffQualityInputDto {
+  runId: string;
+  gold: EvalTypedChangeRef[];
+  predicted: EvalTypedChangeRef[];
+}
+
+export interface DiffQualityResultDto {
+  runId: string;
+  perType: EvalPerTypeScores[];
+  microAveraged: {
+    precision: number;
+    recall: number;
+    f1: number;
+  };
+}
+
+export type UxRole = 'Developer' | 'Maintainer' | 'Other';
+export interface UxSurveyDto {
+  runId?: string;
+  dialogId?: string;
+  role: UxRole;
+  helpfulnessLikert: number; // 1-7
+  susScore?: number; // 0-100
+  comments?: string;
+}
+
 // New interfaces for Specification Maintainer workflow
 export interface SpecificationDto {
   id: string;
@@ -140,6 +185,45 @@ class Api {
   private changesSuggesterUrl = process.env.NEXT_PUBLIC_CHANGES_SUGGESTER_URL || 'http://localhost:3000/suggester';
   private dialogHandlerUrl = process.env.NEXT_PUBLIC_DIALOG_HANDLER_URL || 'http://localhost:3000/dialogs-handler';
   private dataspecerBackendUrl = process.env.NEXT_PUBLIC_DATASPECER_BACKEND || 'http://localhost:3000/dataspecer';
+
+  // ===== Evaluation API =====
+  async submitEvaluationDiff(payload: DiffQualityInputDto): Promise<ApiResponse<DiffQualityResultDto>> {
+    try {
+      const response = await fetch(`${this.dialogHandlerUrl}/api/evaluation/diff`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) {
+        throw new Error('Failed to submit diff evaluation');
+      }
+      const data = await response.json();
+      return { data };
+    } catch (error) {
+      return {
+        error: error instanceof Error ? error.message : 'An error occurred',
+      };
+    }
+  }
+
+  async submitUxSurvey(payload: UxSurveyDto): Promise<ApiResponse<{ ok: true }>> {
+    try {
+      const response = await fetch(`${this.dialogHandlerUrl}/api/evaluation/ux`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) {
+        throw new Error('Failed to submit UX survey');
+      }
+      const data = await response.json();
+      return { data };
+    } catch (error) {
+      return {
+        error: error instanceof Error ? error.message : 'An error occurred',
+      };
+    }
+  }
 
   async detectChangesFromIri(
     psmIri: string,

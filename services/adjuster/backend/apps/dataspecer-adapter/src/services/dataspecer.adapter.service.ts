@@ -1,8 +1,17 @@
-import * as AdmZip from 'adm-zip';
 import { DataspecerAdapterServiceInterface } from '@interfaces/dataspecer.adapter.service.interface';
 import { McpHttpClient } from '@app/common/mcp/client';
+import { Inject, Injectable } from '@nestjs/common';
+import { ClientProxy } from '@nestjs/microservices';
+import { ValidatorCheckEventDto } from '@app/common/dto/evaluation/validator-check.dto';
+import { ApplyMetricEventDto } from '@app/common/dto/evaluation/apply-metric.dto';
+import { McpSafetyEventDto } from '@app/common/dto/evaluation/mcp-safety.dto';
 
+@Injectable()
 export class DataspecerAdapterService implements DataspecerAdapterServiceInterface {
+  public constructor(
+    @Inject('EVALUATION') private readonly evaluationClient: ClientProxy,
+  ) {}
+
   public getHello(): string {
     return 'Hello World!';
   }
@@ -104,5 +113,64 @@ export class DataspecerAdapterService implements DataspecerAdapterServiceInterfa
     const baseUrl = process.env.DATASPECER_MCP_BASE_URL || 'http://dataspecer/api/mcp';
     const authToken = process.env.DATASPECER_MCP_TOKEN || process.env.MCP_AUTH_SECRET;
     return new McpHttpClient({ baseUrl, authToken });
+  }
+
+  public async previewApply(operations: Array<{ op: string; args: any }>, token?: string): Promise<{ planId: string; report: { ok: boolean; issues: Array<{ level: string; message: string }> } }> {
+    const client = this.createClient();
+    const result = await client.callTool<any>('dataspecer.preview_apply', { operations, token });
+    const payload: { planId: string; report: { ok: boolean; issues: Array<{ level: string; message: string }> } } = {
+      planId: result?.planId,
+      report: result?.report ?? { ok: false, issues: [{ level: 'error', message: 'No report returned' }] },
+    };
+    // Emit validator and MCP safety events
+    const validatorEvent: ValidatorCheckEventDto = {
+      stage: 'preview',
+      planId: payload.planId,
+      reportOk: !!payload.report?.ok,
+      issues: (payload.report?.issues || []).map(i => ({ level: (i.level as any) ?? 'error', message: i.message })),
+      timestamp: new Date().toISOString(),
+    };
+    this.evaluationClient.emit('evaluation.validator', validatorEvent).subscribe({ error: () => {} });
+    const mcpEvent: McpSafetyEventDto = {
+      eventType: 'preview_apply',
+      planId: payload.planId,
+      ok: !!payload.report?.ok,
+      issuesCount: Array.isArray(payload.report?.issues) ? payload.report.issues.length : 0,
+      timestamp: new Date().toISOString(),
+    };
+    this.evaluationClient.emit('evaluation.mcp', mcpEvent).subscribe({ error: () => {} });
+    return payload;
+  }
+
+  public async applyChanges(planId: string, token?: string): Promise<{ applied: boolean; changedIris: string[] }> {
+    const client = this.createClient();
+    const result = await client.callTool<any>('dataspecer.apply_changes', { planId, confirm: true, token });
+    const payload = {
+      applied: !!result?.applied,
+      changedIris: Array.isArray(result?.changedIris) ? result.changedIris : [],
+    };
+    const mcpEvent: McpSafetyEventDto = {
+      eventType: 'apply_changes',
+      planId,
+      ok: !!payload.applied,
+      timestamp: new Date().toISOString(),
+    };
+    this.evaluationClient.emit('evaluation.mcp', mcpEvent).subscribe({ error: () => {} });
+    const applyEvent: ApplyMetricEventDto = {
+      planId,
+      appliedOk: !!payload.applied,
+      changedIrisCount: payload.changedIris.length,
+      timestamp: new Date().toISOString(),
+    };
+    this.evaluationClient.emit('evaluation.apply', applyEvent).subscribe({ error: () => {} });
+    return payload;
+  }
+
+  public async getLightweightOwlTtl(iri: string): Promise<string> {
+    const client = this.createClient();
+    const result = await client.callTool<any>('dataspecer.generate_lightweight_owl_from_iri', { iri });
+    const ttl: string = result?.content?.[0]?.text ?? '';
+    if (!ttl) throw new Error('Empty OWL/Turtle payload');
+    return ttl;
   }
 }

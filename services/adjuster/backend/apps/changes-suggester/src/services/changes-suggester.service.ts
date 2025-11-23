@@ -6,7 +6,7 @@ import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { PROMPTS } from '@app/common/config/prompts';
 import { z } from 'zod';
 import { ChangesSuggesterServiceInterface } from '@interfaces/changes-suggester.service.interface';
-import { extractKeywordsFromChanges, selectRelevantPsmContext } from '@app/common/utils/psm-context';
+import { extractKeywordsFromChanges, selectRelevantPsmContext, selectRelevantRdfContext } from '@app/common/utils/psm-context';
 
 @Injectable()
 export class ChangesSuggesterService implements ChangesSuggesterServiceInterface {
@@ -20,8 +20,10 @@ export class ChangesSuggesterService implements ChangesSuggesterServiceInterface
 
     // Select relevant chunks from PSM to keep token usage bounded
     const MAX_PSM_CONTEXT_CHARS: number = 3000;
+    const MAX_ONTOLOGY_CONTEXT_CHARS: number = 2000;
     const keywords: string[] = extractKeywordsFromChanges(dto.changes as any);
     const selectedPsm: string = selectRelevantPsmContext(dto.psm || '', keywords, MAX_PSM_CONTEXT_CHARS);
+    const selectedOntology: string = selectRelevantRdfContext(dto.ontology || '', keywords, MAX_ONTOLOGY_CONTEXT_CHARS);
 
     const prompt: ChatPromptTemplate = ChatPromptTemplate.fromTemplate(PROMPTS.changesSuggester.suggestionsTemplate);
 
@@ -41,6 +43,7 @@ export class ChangesSuggesterService implements ChangesSuggesterServiceInterface
     const result: any = await chain.invoke({
       changes: JSON.stringify(dto.changes),
       psm: selectedPsm,
+      ontology: selectedOntology,
     });
 
     const suggestions: Suggestion[] = result.suggestions.map(suggestion => ({

@@ -62,6 +62,12 @@ function HomeContent() {
           >
             Accepted Changes
           </button>
+          <button
+            onClick={() => router.push('/evaluation')}
+            className="px-3 py-1 rounded text-sm transition-colors text-gray-400 hover:text-white hover:bg-zinc-700"
+          >
+            Evaluation
+          </button>
           
           <div className="border-l border-zinc-600 h-6"></div>
           

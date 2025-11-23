@@ -1,0 +1,231 @@
+\chapter{Solution Design}
+
+Creating and maintaining semantic data specifications in Dataspecer is a manual and lengthy process. In practice, development often grows from the ground up (DB schemas, DTOs, JSON Schemas), deviating from the initial semantic design. Our goal is to bridge this gap by comparing a new JSON Schema with an existing Dataspecer specification, detailing the identified changes in a user-friendly manner, and implementing the approved modifications back into Dataspecer through its API, with a maintainer's involvement.
+
+To ground the discussion, consider a running example from the Czech public sector: the Register of Associations of Municipalities. This national-level specification, already modeled in Dataspecer, captures associations, their participants (towns, cities, counties), and rich connection metadata. While metadata and relationships are predefined, downstream systems evolve: developers may introduce a telephone number for an executive person, or refactor a \texttt{residence} field from an \texttt{Any} placeholder into a structured object with \texttt{street}, \texttt{locality}, and \texttt{postalCode}. Such changes are typical of real-life maintenance tasks and serve here as a concrete scenario in which our approach operates.
+
+Following the latest findings on LLMs and formal artifacts, our approach utilizes the model as a \emph{recommendation} and \emph{summarization} tool, while validators/reasoners ensure accuracy, along with task breakdown, retrieval of structured context, and human oversight. Dependability arises from a close integration of LLMs with deterministic validations and structured workflows. In the running example, the LLM proposes a human-readable summary of the proposed telephone attribute (including cardinality and datatype hints) and explains the effect of refining \texttt{residence} into a nested object; however, the final acceptance and exact facet settings are enforced by typed validators and a maintainer review.
+
+\paragraph{Vertical Slice.}
+The vertical slice encompasses the ingestion of JSON Schema and the execution of a structured diff; the classification of changes using simple yet effective heuristics such as \emph{add}, \emph{remove}, \emph{modify}, and \emph{rename}; the generation of LLM-assisted natural-language explanations for a confined range of changes — including property additions or removals, enum alterations, and scalar type refinements; a compact review interface tailored to Developer and Maintainer roles; the integration of approved changes into a target PSM via a lightweight Dataspecer adapter capable of creating or updating properties and basic facets; and, finally, a \textbf{minimal MCP (Model Context Protocol) tool interface for Dataspecer} that exposes read/apply operations as secure, typed tools consumable by any MCP-capable LLM client.\\
+\\
+
+By combining deterministic diffing and validation with LLM-generated explanations and MCP-integrated tooling, the approach reduces manual effort while preserving accountability. The Register of Associations of Municipalities serves as a realistic illustration: routine field additions and structural refinements become guided, reviewable steps that keep Dataspecer’s semantic assets aligned with evolving downstream systems.
+
+\section{Use Cases}
+For the \textit{Regular Developer}, the system accepts an uploaded JSON Schema (or a selected CI artifact), produces a comparison view with color-coded additions, removals, modifications, and renames, and offers per-change explanations with suggested schema-side fixes—supporting quick iterative re-uploads when needed.
+
+For the \textit{Specification Maintainer}, the workflow begins by selecting a target specification/PSM and uploading a new JSON Schema. The tool groups changes with human-readable rationale and lets the maintainer accept adjustments into the specification, reject them, or flag them for developers. Accepted changes are applied to Dataspecer through its API or via MCP tool calls, and a concise report (Markdown/PDF) can be exported for traceability.
+
+For an \textit{LLM Operator (via MCP)}, an MCP-compatible client can discover the \texttt{dataspecer} toolset (e.g., \texttt{list\_specs}, \texttt{get\_psm}, \texttt{preview\_apply}, \texttt{apply\_changes}, \texttt{validate}), execute guarded tool calls against curated prompts, and capture machine-readable results suitable for audit.
+
+\section{User Stories}
+
+\subsection*{Regular Developer}
+\begin{enumerate}[\textbf{RD\arabic*}]
+  \item \textbf{Open validation link.} As a Regular Developer, I want to open a token-protected link from the Maintainer to validate my JSON Schema against the selected specification, so that I can quickly see what aligns and what does not. 
+  \begin{itemize}
+    \item \emph{Acceptance criteria:} Given a valid, non-expired token; When I open the link; Then I see the upload screen with the target spec context and a “Check” action.
+  \end{itemize}
+
+  \item \textbf{Upload and check schema.} As a Regular Developer, I want to upload my JSON Schema and run an alignment check, so that I can review changes grouped and color-coded. 
+  \begin{itemize}
+    \item \emph{Acceptance criteria:} Given a JSON Schema file; When I click “Check”; Then the results page shows additions (green), removals (red), renames/type changes (blue), grouped with a visible group ID.
+  \end{itemize}
+
+  \item \textbf{Inspect change details.} As a Regular Developer, I want to click any change and see an explanation and relevant schema snippet, so that I understand the issue and its impact. 
+  \begin{itemize}
+    \item \emph{Acceptance criteria:} Given a change entry; When I select it; Then the right panel shows a human-readable rationale and, when available, a code fragment indicating the locus of change.
+  \end{itemize}
+
+  \item \textbf{Iterate by re-upload.} As a Regular Developer, I want to re-upload a modified JSON Schema and re-run the check, so that I can verify fixes quickly.
+  \begin{itemize}
+    \item \emph{Acceptance criteria:} Given I am on the results page; When I click “Re-import” and upload a new version; Then a new comparison session is shown with updated diffs.
+  \end{itemize}
+\end{enumerate}
+
+\subsection*{Specification Maintainer}
+\begin{enumerate}[\textbf{SM\arabic*}]
+  \item \textbf{Select target specification.} As a Specification Maintainer, I want to choose a Dataspecer specification and PSM, so that adjustments are proposed against the correct target. 
+  \begin{itemize}
+    \item \emph{Acceptance criteria:} Given the list of specifications; When I select one and a concrete PSM; Then the Adjuster is opened with the chosen context.
+  \end{itemize}
+
+  \item \textbf{Analyze uploaded schema.} As a Specification Maintainer, I want to upload a new JSON Schema and run an analysis, so that I can see a classified, grouped summary of differences.
+  \begin{itemize}
+    \item \emph{Acceptance criteria:} Given an uploaded schema; When I click “Analyze”; Then the Change Summary shows adds/removes/renames or type changes with group IDs and severity (acceptable vs. problematic).
+  \end{itemize}
+
+  \item \textbf{Decide per change.} As a Specification Maintainer, I want to accept, reject, or mark a change for the developers with comments, so that responsibilities are clear and traceable. 
+  \begin{itemize}
+    \item \emph{Acceptance criteria:} Given a listed change; When I choose an action; Then the decision is persisted with optional note and appears in the audit trail/report.
+  \end{itemize}
+
+  \item \textbf{Preview updated spec.} As a Specification Maintainer, I want to preview how the specification would look after accepted changes, so that I can verify semantic impact before applying. 
+  \begin{itemize}
+    \item \emph{Acceptance criteria:} Given pending accepted changes; When I open “Preview”; Then a visual/graph view renders the prospective PSM state without mutating the real spec.
+  \end{itemize}
+
+  \item \textbf{Apply changes to Dataspecer.} As a Specification Maintainer, I want to apply only the approved adjustments to the target PSM via the adapter, so that the canonical specification stays consistent.
+  \begin{itemize}
+    \item \emph{Acceptance criteria:} Given a reviewed set; When I click “Apply”; Then the adapter performs create/update operations (properties, required, enums, basic facets) and confirms success; The original spec remains unchanged until this step.
+  \end{itemize}
+
+  \item \textbf{Export feedback report.} As a Specification Maintainer, I want to export a developer-facing report of flagged or rejected changes with recommended fixes, so that the team can adjust their schema.
+  \begin{itemize}
+    \item \emph{Acceptance criteria:} Given completed review; When I export; Then a Markdown/PDF summary contains grouped issues, rationales, and next steps.
+  \end{itemize}
+
+  \item \textbf{Create validation link.} As a Specification Maintainer, I want to generate a time-limited token link for developers, so that they can self-check new schema versions against the same spec. 
+  \begin{itemize}
+    \item \emph{Acceptance criteria:} Given a specification; When I generate a link; Then a tokenized HTTPS URL is produced with expiry metadata and limited scope.
+  \end{itemize}
+\end{enumerate}
+
+\subsection*{Shared Interaction \& UI}
+\begin{enumerate}[\textbf{SH\arabic*}]
+  \item \textbf{Color-coded grouped diffs.} As a user, I want color-coded highlights and related-change grouping with stable IDs, so that I can navigate large diffs efficiently. 
+  \item \textbf{Explanations panel.} As a user, I want concise natural-language rationales for supported change types and links to local diff snippets, so that I understand the “why” quickly. 
+  \item \textbf{Consistency across roles.} As a user, I want the comparison results UI to be consistent for both Developer and Maintainer, so that hand-offs are frictionless. 
+\end{enumerate}
+
+\subsection*{MCP \& Integration}
+\begin{enumerate}[\textbf{IN\arabic*}]
+  \item \textbf{MCP minimal toolset.} As a client integrating with MCP, I want typed tools to read PSM slices, preview applications, and apply approved actions with a mandatory dry-run, so that LLM-capable clients operate safely. (Non-UI capability derived from process description.) 
+  \item \textbf{Adapter isolation.} As a maintainer of the platform, I want Dataspecer integration behind a dedicated adapter, so that Dataspecer API evolution affects only one module. 
+\end{enumerate}
+
+\subsection*{Quality \& Operations (Cross-cutting)}
+\begin{enumerate}[\textbf{QO\arabic*}]
+  \item \textbf{Usability aids.} As a user, I want legends/tooltips, keyboard navigation, and stable layout for large diffs, so that reviews are efficient. 
+  \item \textbf{Security tokens \& HTTPS.} As an operator, I want all validation links to be time-limited tokens and the app to run under HTTPS, so that access is controlled and secure. 
+  \item \textbf{Performance bounds.} As a user, I want typical schemas (\(\leq\)10k LOC) to analyze within minutes with bounded LLM calls, so that feedback loops remain short. 
+  \item \textbf{Reliability \& integrity.} As an operator, I want invalid uploads handled gracefully and the original specification to remain unchanged until explicit apply, so that data integrity is preserved. 
+  \item \textbf{Maintainability \& logs.} As a developer, I want modular services (ingest/diff/classifier/llm\_suggester/adapter/mcp) with structured logs, so that issues are diagnosable and components are testable. 
+  \item \textbf{Interoperability \& tests.} As a team, we want MCP tool signatures described with JSON Schemas and unit/integration tests across modules, so that clients stay compatible and behavior remains verifiable. 
+\end{enumerate}
+
+
+\section{C4 model}
+% (PLACEHOLDER, pridam pozdeji)
+
+\section{Used technologies}
+
+\subsection*{Backend}
+\subsubsection*{NestJS (TypeScript) \cite{nestjs}}
+Modular application framework to implement \texttt{ingest}, \texttt{diff}, \texttt{classifier}, \texttt{llm\_suggester}, \texttt{dataspecer\_adapter}, and \texttt{mcp\_server} as cohesive modules with DI, guards, and interceptors.
+
+\subsubsection*{Validation \& Differencing \cite{zod,jsonschemadiff,jsonschema}}
+A structural differ (\textit{json-schema-diff}) for reproducible detection of \texttt{add/remove/modify/rename}. \textbf{Zod} defines and enforces typed contracts for internal data structures (diff items, suggested actions, MCP tool I/O) and validates all LLM outputs and user decisions before execution. A lightweight JSON Schema parser is used only for syntax/shape reading where needed.
+
+\subsubsection*{Persistence (Prisma + PostgreSQL) \cite{prisma,postgres}}
+Typed ORM and relational store for sessions, diffs, decisions, reports, and MCP audit records; migrations and transactional apply operations.
+
+\subsubsection*{Dataspecer Adapter}
+Thin mapping layer translating accepted actions to PSM updates (create/update property, toggle \texttt{required}, update enum); idempotent operations and dry-run checks.
+
+\subsubsection*{MCP Server for Dataspecer \cite{mcp}}
+Minimal MCP endpoint exposing typed tools (\texttt{list\_specs}, \texttt{get\_psm}, \texttt{preview\_apply}, \texttt{apply\_changes}, \texttt{validate}); includes confirmation tokens, previews, and full audit hooks.
+
+\subsection*{Frontend}
+\subsubsection*{Next.js (React) \cite{nextjs,react}}
+Two-panel review UI (diff tree + details/actions), filters by type/path, and session-aware navigation; optional SSR where useful.
+
+\subsubsection*{Tailwind UI Layer \cite{tailwind}}
+Utility-first styling for consistent spacing, color-coded change badges, and accessible components; minimal custom theming.
+
+\subsubsection*{MCP Client (Developer Console) \cite{mcp}}
+Optional in-app console to discover and invoke \texttt{dataspecer} MCP tools for debugging/demos with clear previews and confirmations.
+
+\subsection*{LLM scaffolding}
+\subsubsection*{Prompting}
+Task-specific templates supplying a localised diff snippet, nearby property context (names, descriptions, examples, constraints), and explicit instruction (explain vs.\ propose minimal action).
+
+\subsubsection*{Guardrails \cite{zod}}
+\textbf{Zod}-defined output schemas for all model generations and API payloads; strict parsing and rejection of non-conformant outputs; caching/timeout policies to bound latency and cost.
+
+\subsection*{DevOps}
+\subsubsection*{Docker Compose \& Docker \cite{compose,docker}}
+Local orchestration of frontend, backend, and PostgreSQL; reproducible builds and environment parity.
+
+\subsubsection*{Nginx Reverse Proxy \cite{nginx}}
+TLS termination, static asset delivery, and path routing to backend services; security headers.
+
+\section{Rationale and Technology Justification}
+
+This section explains why the proposed architecture and stack are well-suited to the problem, connecting design choices to  the properties of data-spec/ontology tasks, the Dataspecer ecosystem, and evidence from recent literature on LLM-assisted modelling \cite{fathallah2024neongpt,giglou2024llms4om,neubauer2025jsonschema,allen2024classmembership,zhang2025ontourl}.
+
+\subsection*{LLM as a constrained suggester, not an autonomous editor}
+The core decision is to position the LLM as a \emph{suggestion and explanation} engine, while the \emph{source of truth} remains deterministic validators and human approval. This aligns with empirical findings that LLMs excel at language-to-structure drafting and surface linking, but are brittle on symbolic reasoning and strict conformance without scaffolding \cite{allen2024classmembership,zhang2025ontourl}. By decomposing the workflow into \textsc{detect} $\rightarrow$ \textsc{classify} $\rightarrow$ \textsc{explain} $\rightarrow$ \textsc{map}, and enforcing validation at each step (ZOD for JSON~Schema; typed action schemas), we inherit the reliability gains reported in NeOn-GPT and schema-centric toolchains \cite{fathallah2024neongpt,neubauer2025jsonschema}.
+
+\subsection*{JSON Schema–first scope and ZOD structured diff}
+Focusing on JSON~Schema (with ZOD and a structural differ) matches the dominant artefacts in real-world API and data-engineering pipelines. It optimises for:
+\begin{enumerate}
+  \item \textbf{Immediate utility}: property-level changes (adds/removes/types/enums/required) explain a large share of practical drift between implementation and specification.
+  \item \textbf{Determinism}: ZOD provides fast, standard-conformant checking; diffs are reproducible and auditable.
+  \item \textbf{Expandable path}: the same decomposition can later be extended to RDF/OWL shapes; the \texttt{dataspecer\_adapter} boundary isolates those differences.
+\end{enumerate}
+Alternatives (e.g., first solving OWL axiomatisation end-to-end) would trade early value for higher complexity and risk without changing the review ergonomics.
+
+\subsection*{Human-in-the-loop review UI}
+Placing a lightweight, two-panel UI at the centre acknowledges that acceptance criteria are partly socio-technical (team conventions, domain nuance). This matches best practices observed in ontology matching and modelling studies, where human oversight remains pivotal even when LLMs approach or exceed automatic baselines on text-heavy benchmarks \cite{giglou2024llms4om}.
+
+\subsection*{Minimal MCP interface for Dataspecer}
+Tohle jeste mozna budu upravovat
+Exposing Dataspecer operations through a minimal MCP toolset (\texttt{list\_specs}, \texttt{get\_psm}, \texttt{preview\_apply}, \texttt{apply\_changes}, \texttt{validate}) brings three benefits:
+\begin{itemize}
+  \item \textbf{Interoperability}: any MCP-capable client can orchestrate the same guarded adjustments without custom glue.
+  \item \textbf{Safety-by-design}: the protocol encourages \emph{preview-before-apply}, typed inputs/outputs, and auditable runs.
+  \item \textbf{Separation of concerns}: the LLM plans and explains; MCP tools execute and verify. This follows the tool-augmented pattern advocated by recent evaluations of LLM competency boundaries \cite{zhang2025ontourl}.
+\end{itemize}
+Compared to ad-hoc REST calls from prompts, MCP reduces prompt fragility, supports reproducibility, and cleanly encodes preconditions (tokens, scope, dry-run).
+
+\subsection*{NestJS + TypeScript backend}
+Dataspecer and the broader team ecosystem are TypeScript-centric. NestJS provides:
+\begin{enumerate}
+  \item \textbf{Modularity}: clear feature boundaries (\texttt{ingest}, \texttt{diff}, \texttt{classifier}, \texttt{llm\_suggester}, \texttt{dataspecer\_adapter}, \texttt{mcp\_server}) improve testability and change isolation.
+  \item \textbf{Type safety end-to-end}: from parsed JSON~Schema to typed action contracts and MCP tool signatures.
+  \item \textbf{Integration ergonomics}: easy adoption of Prisma, ZOD, and OpenAPI; straightforward Dockerisation.
+\end{enumerate}
+Alternative stacks (Python/Java) are viable but add impedance mismatch with Dataspecer’s TS codebase and the planned UI.
+
+\subsection*{Next.js + Tailwind frontend}
+Next.js offers SSR/ISR as needed, fast dev experience, and a robust component model for an inspection-heavy UI. Tailwind keeps styling consistent and maintainable with minimal overhead. The solution favours \emph{clarity} (diff tree + details panel) over heavy visualisation, which aligns with the evaluation’s SUS + helpfulness focus.
+
+\subsection*{Prisma + PostgreSQL persistence}
+A relational store is sufficient for sessions, diffs, decisions, and audit logs, while keeping deployment simple. Prisma’s typed client enhances correctness and developer velocity. More complex storage (e.g., vector DB for retrieval) is intentionally deferred; literature indicates that retrieval quality matters, but the first gains come from textualising local context and enforcing validation \cite{giglou2024llms4om,neubauer2025jsonschema}.
+
+\subsection*{Docker + Nginx + CI}
+Containerisation supports parity between local and production, reproducible builds, and easy toggling of MCP mutating tools in demo environments. Nginx provides mature TLS termination and routing. This keeps operations lightweight.
+
+\subsection*{Security and safety properties}
+The design encodes security at the boundaries most prone to error:
+\begin{itemize}
+  \item \textbf{Data ingress}: schema validation and size/time limits prevent resource abuse.
+  \item \textbf{LLM outputs}: strictly typed, validator-checked; non-conformant suggestions are rejected.
+  \item \textbf{Mutation guardrails}: \texttt{preview\_apply} is mandatory before \texttt{apply\_changes}; scope-limited tokens; full audit trail.
+\end{itemize}
+This answers the common failure modes (hallucinated structure, silent constraint regressions) identified in recent studies \cite{allen2024classmembership,neubauer2025jsonschema}.
+
+\subsection*{Scalability and evolution}
+The modular split allows independent evolution:
+\begin{enumerate}
+  \item Swap the LLM provider or add retrieval without touching \texttt{dataspecer\_adapter}.
+  \item Extend \texttt{diff/classifier} to deeper nesting or new change types.
+  \item Add RDF/OWL support behind the same MCP tool signatures.
+\end{enumerate}
+This protects early investment while opening a path to richer semantics and neuro-symbolic hybrids recommended by the literature \cite{zhang2025ontourl}.
+
+\subsection*{Fit to evaluation and stakeholder needs}
+The architecture surfaces measurable artefacts at each stage (diffs, typed actions, validator reports), directly enabling the planned metrics: precision/recall per change type, round-trip conformance, apply success, helpfulness, and MCP safety indicators. It also mirrors how maintainers and developers currently reason about change (properties, required, enums), increasing adoption likelihood.
+
+\section{Deployment diagram}
+% (PLACEHOLDER, pridam pozdeji)
+
+\section{Evaluation}
+The evaluation probes four aspects. First, \textit{diff and classification quality}: we compute precision, recall, and F$_1$ for add/remove/modify/rename against a curated gold standard. Second, \textit{validator quality}: we check JSON Schema syntactic validity and round-trip conformance before and after applying changes. Third, \textit{apply success}: we report the share of accepted actions that translate cleanly into PSM operations without validator failures. Fourth, \textit{UX and safety}: we gather Likert-scale helpfulness ratings and SUS scores for the review UI, and we monitor MCP safety indicators such as the proportion of mutating operations preceded by \texttt{preview\_apply}, the number of blocked attempts by schema guardrails, and the completeness of the audit trail.
+
+Datasets consist of JSON Schema pairs reflecting realistic evolutions (additions/removals, type changes, enums, and required flags). For each pair we assemble a typed gold diff, run the end-to-end pipeline, compute per-type scores, and collect short think-aloud feedback from Developer and Maintainer roles. We also compare outcomes when applying via the direct adapter versus through MCP (preview+apply), highlighting reproducibility and safety trade-offs.
+
+Success is indicated by strong precision/recall on additions and removals, competitive precision on modifications/renames, majority-positive helpfulness ratings for supported change types, a high apply-success rate with zero validator failures, and consistently safe MCP usage in which mutating operations follow a successful preview and leave no unaudited mutations.
+

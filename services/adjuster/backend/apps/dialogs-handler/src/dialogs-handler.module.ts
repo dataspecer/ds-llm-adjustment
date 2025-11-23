@@ -12,6 +12,14 @@ import { SpecificationProcessorService } from './services/specification-processo
 import { SpecificationMaintainerController } from './controllers/http/specification-maintainer/specification-maintainer.controller';
 import { SpecificationMaintainerService } from './services/specification-maintainer/specification-maintainer.service';
 import { LlmChatService } from './services/specification-maintainer/llm-chat.service';
+import { EvaluationDiffEntity } from './entities/evaluation-diff.entity';
+import { EvaluationValidatorEntity } from './entities/evaluation-validator.entity';
+import { EvaluationApplyEntity } from './entities/evaluation-apply.entity';
+import { EvaluationUxEntity } from './entities/evaluation-ux.entity';
+import { EvaluationMcpEntity } from './entities/evaluation-mcp.entity';
+import { EvaluationService } from './services/evaluation/evaluation.service';
+import { EvaluationController } from './controllers/http/evaluation/evaluation.controller';
+import { EvaluationAmqpController } from './controllers/amqp/evaluation/evaluation.amqp.controller';
 
 @Module({
   imports: [
@@ -52,7 +60,7 @@ import { LlmChatService } from './services/specification-maintainer/llm-chat.ser
         return {
           type: 'postgres',
           url: databaseUrl,
-          entities: [ChatMessageEntity],
+          entities: [ChatMessageEntity, EvaluationDiffEntity, EvaluationValidatorEntity, EvaluationApplyEntity, EvaluationUxEntity, EvaluationMcpEntity],
           synchronize: true,
           logging: configService.get('NODE_ENV') === 'development',
           ssl: false,
@@ -64,9 +72,9 @@ import { LlmChatService } from './services/specification-maintainer/llm-chat.ser
       },
       inject: [ConfigService],
     }),
-    TypeOrmModule.forFeature([ChatMessageEntity])
+    TypeOrmModule.forFeature([ChatMessageEntity, EvaluationDiffEntity, EvaluationValidatorEntity, EvaluationApplyEntity, EvaluationUxEntity, EvaluationMcpEntity])
   ],
-  controllers: [DialogAmqpController, SpecificationDialogController, SpecificationMaintainerController],
+  controllers: [DialogAmqpController, SpecificationDialogController, SpecificationMaintainerController, EvaluationController, EvaluationAmqpController],
   providers: [
     {
       provide: IDialogService,
@@ -74,7 +82,8 @@ import { LlmChatService } from './services/specification-maintainer/llm-chat.ser
     },
     SpecificationProcessorService,
     SpecificationMaintainerService,
-    LlmChatService
+    LlmChatService,
+    EvaluationService
   ],
 })
 export class DialogsHandlerModule {}
