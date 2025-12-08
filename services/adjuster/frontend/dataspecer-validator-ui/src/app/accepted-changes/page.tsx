@@ -151,7 +151,19 @@ export default function AcceptedChangesPage() {
         </div>
         
         <div className="flex items-center space-x-2">
-          <span className="text-sm text-gray-400">Accepted Changes</span>
+          <button
+            onClick={() => router.push('/evaluation/diff')}
+            className="px-3 py-1 rounded text-sm transition-colors text-gray-200 bg-blue-600 hover:bg-blue-700"
+          >
+            Evaluate Diff
+          </button>
+          <button
+            onClick={() => router.push('/evaluation/ux')}
+            className="px-3 py-1 rounded text-sm transition-colors text-gray-200 bg-green-600 hover:bg-green-700"
+          >
+            UX Survey
+          </button>
+          <span className="text-sm text-gray-400 ml-2">Accepted Changes</span>
         </div>
       </nav>
 

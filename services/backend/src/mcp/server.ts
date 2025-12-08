@@ -473,7 +473,8 @@ export function registerMcpHandlers(app: any, options: McpServerOptions, deps?: 
             return { jsonrpc: "2.0", id: msg.id ?? null, result: { applied: true, changedIris: changed } };
           }
           if (name === "dataspecer.list_specs") {
-            const url = `${base}/resources/root-resources`;
+            //http://localhost:3002/api/resources/packages?iri=http%3A%2F%2Fdataspecer.com%2Fpackages%2Flocal-root
+            const url = `${base}/resources/packages?iri=${encodeURIComponent("http://dataspecer.com/packages/local-root")}`;
             const r = await fetch(url);
             if (!r.ok) return { jsonrpc: "2.0", id: msg.id ?? null, error: { code: r.status, message: r.statusText } };
             const text = await r.text();

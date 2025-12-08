@@ -105,11 +105,33 @@ export class ModelStore {
     }
 
     async getString(): Promise<string> {
-        return this.getBuffer().then(buffer => buffer?.toString());
+        return this.getBuffer().then(buffer => buffer ? buffer.toString() : "");
     }
 
     async getJson(): Promise<any> {
-        return this.getString().then(str => JSON.parse(str));
+        return this.getString().then(str => {
+            // Provide a safe default shape expected by memory stores/spec builders
+            const defaultStore = { operations: [], resources: {} } as any;
+            if (!str) {
+                return defaultStore;
+            }
+            try {
+                const parsed: any = JSON.parse(str);
+                if (!parsed || typeof parsed !== "object") {
+                    return defaultStore;
+                }
+                if (parsed.resources == null || typeof parsed.resources !== "object") {
+                    parsed.resources = {};
+                }
+                if (!Array.isArray(parsed.operations)) {
+                    parsed.operations = [];
+                }
+                return parsed;
+            } catch {
+                // Return default shape on malformed JSON to avoid hard failures
+                return defaultStore;
+            }
+        });
     }
 
     async setString(payload: string): Promise<void> {

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { api, UxSurveyDto, UxRole } from '../../services/api'
 import Link from 'next/link'
 
@@ -14,6 +14,17 @@ export default function UxSurveyPage() {
   const [ok, setOk] = useState<boolean>(false)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState<boolean>(false)
+
+  // Prefill from query params when navigated from results
+  useEffect(() => {
+    try {
+      const sp = new URLSearchParams(window.location.search)
+      const d = sp.get('dialogId')
+      const r = sp.get('runId')
+      if (d && !dialogId) setDialogId(d)
+      if (r && !runId) setRunId(r)
+    } catch {}
+  }, [])
 
   const submit = async () => {
     setOk(false)

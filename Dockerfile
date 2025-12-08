@@ -60,12 +60,12 @@ COPY --from=builder /usr/src/final /usr/src/app
 
 # Ensure OpenSSL 3 is available for Prisma engines during migrations
 RUN apt-get update && apt-get install -y --no-install-recommends \
-  ca-certificates libssl3 \
+  ca-certificates libssl3 procps \
   && rm -rf /var/lib/apt/lists/*
 
 # Do prisma migrations (needs to be done in correct absolute directory)
 RUN mkdir -p /usr/src/app/database
-RUN bunx prisma migrate deploy --schema dist/schema.prisma
+RUN bunx prisma@6.13.0 migrate deploy --schema dist/schema.prisma
 
 
 
@@ -85,10 +85,10 @@ ENV DATASPECER_GIT_COMMIT=${GIT_COMMIT} \
 
 # Ensure OpenSSL 3 is available for Prisma at runtime, make dir accessible, install prisma for migrations, and clean cache
 RUN apt-get update && apt-get install -y --no-install-recommends \
-  ca-certificates libssl3 \
+  ca-certificates libssl3 procps \
   && rm -rf /var/lib/apt/lists/* && \
   chmod a+rwx /usr/src/app && \
-  bun install --no-cache prisma && \
+  bun install --no-cache prisma@6.13.0 && \
   rm -rf ~/.bun ~/.cache
 
 # Copy final files

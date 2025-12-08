@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject } from '@nestjs/common';
+import { ClientProxy } from '@nestjs/microservices';
 import { ChatPromptTemplate } from "@langchain/core/prompts";
 import { PROMPTS } from "@app/common/config/prompts";
 import { ChatOpenAI } from "@langchain/openai";
@@ -11,7 +12,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 export class SpecificationProcessorService {
   constructor(
     @InjectRepository(ChatMessageEntity)
-    private requestRepository: Repository<ChatMessageEntity>
+    private requestRepository: Repository<ChatMessageEntity>,
+    @Inject('EVALUATION') private readonly evaluationClient: ClientProxy,
   ) {}
 
   public async processDefinitions(
@@ -34,11 +36,20 @@ export class SpecificationProcessorService {
   }
 
   private async processDescribeChanges(original: string, updated: string): Promise<string> {
+    const { pickGpt5Model } = await import('@app/common/evaluation/model');
+    const modelName = pickGpt5Model();
     const model = new ChatOpenAI({
-      model: "gpt-4.1",
+      model: modelName,
       temperature: 0,
       apiKey: process.env.OPENAI_API_KEY,
     });
+    this.evaluationClient.emit('evaluation.model', {
+      runId: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+      service: 'dialogs-handler',
+      operation: 'specification-processor.describe',
+      modelName,
+      timestamp: new Date().toISOString(),
+    }).subscribe({ error: () => {} });
 
     const prompt = ChatPromptTemplate.fromTemplate(PROMPTS.specificationProcessor.describeChangesTemplate);
 
@@ -59,11 +70,20 @@ export class SpecificationProcessorService {
     newSchema: string,
     psm: string
   ): Promise<ChatMessageEntity> {
+    const { pickGpt5Model } = await import('@app/common/evaluation/model');
+    const modelName = pickGpt5Model();
     const model = new ChatOpenAI({
-      model: "gpt-4.1",
+      model: modelName,
       temperature: 0,
       apiKey: process.env.OPENAI_API_KEY,
     });
+    this.evaluationClient.emit('evaluation.model', {
+      runId: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+      service: 'dialogs-handler',
+      operation: 'specification-processor.schema-diff',
+      modelName,
+      timestamp: new Date().toISOString(),
+    }).subscribe({ error: () => {} });
 
     const prompt: ChatPromptTemplate = ChatPromptTemplate.fromTemplate(PROMPTS.specificationProcessor.schemaDifferencesTemplate);
 
@@ -162,11 +182,20 @@ export class SpecificationProcessorService {
     artifactFormat: string,
     request: ChatMessageEntity
   ) {
+    const { pickGpt5Model } = await import('@app/common/evaluation/model');
+    const modelName = pickGpt5Model();
     const model: ChatOpenAI = new ChatOpenAI({
-      model: "gpt-4.1",
+      model: modelName,
       temperature: 0,
       apiKey: process.env.OPENAI_API_KEY,
     });
+    this.evaluationClient.emit('evaluation.model', {
+      runId: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+      service: 'dialogs-handler',
+      operation: 'specification-processor.definitions',
+      modelName,
+      timestamp: new Date().toISOString(),
+    }).subscribe({ error: () => {} });
 
     const prompt: ChatPromptTemplate = ChatPromptTemplate.fromTemplate(PROMPTS.specificationProcessor.definitionsTemplate);
 

@@ -33,6 +33,10 @@ export class DetectedChangesDto {
   @IsString()
   public dialogId: string;
 
+  @IsOptional()
+  @IsString()
+  public runId?: string;
+
   @IsArray()
   @ValidateNested({ each: true })
   public changes: DetectedChange[];

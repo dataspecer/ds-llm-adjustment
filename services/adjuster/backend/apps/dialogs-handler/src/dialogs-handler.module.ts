@@ -20,6 +20,7 @@ import { EvaluationMcpEntity } from './entities/evaluation-mcp.entity';
 import { EvaluationService } from './services/evaluation/evaluation.service';
 import { EvaluationController } from './controllers/http/evaluation/evaluation.controller';
 import { EvaluationAmqpController } from './controllers/amqp/evaluation/evaluation.amqp.controller';
+import { EvaluationModelEntity } from './entities/evaluation-model.entity';
 
 @Module({
   imports: [
@@ -52,6 +53,15 @@ import { EvaluationAmqpController } from './controllers/amqp/evaluation/evaluati
           queueOptions: { durable: true },
         },
       },
+      {
+        name: 'EVALUATION',
+        transport: Transport.RMQ,
+        options: {
+          urls: [process.env.RABBITMQ_URL || 'amqp://guest:guest@rabbitmq:5672'],
+          queue: 'dialogs_handler_queue',
+          queueOptions: { durable: true },
+        },
+      },
     ]),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
@@ -60,7 +70,7 @@ import { EvaluationAmqpController } from './controllers/amqp/evaluation/evaluati
         return {
           type: 'postgres',
           url: databaseUrl,
-          entities: [ChatMessageEntity, EvaluationDiffEntity, EvaluationValidatorEntity, EvaluationApplyEntity, EvaluationUxEntity, EvaluationMcpEntity],
+          entities: [ChatMessageEntity, EvaluationDiffEntity, EvaluationValidatorEntity, EvaluationApplyEntity, EvaluationUxEntity, EvaluationMcpEntity, EvaluationModelEntity],
           synchronize: true,
           logging: configService.get('NODE_ENV') === 'development',
           ssl: false,
@@ -72,7 +82,7 @@ import { EvaluationAmqpController } from './controllers/amqp/evaluation/evaluati
       },
       inject: [ConfigService],
     }),
-    TypeOrmModule.forFeature([ChatMessageEntity, EvaluationDiffEntity, EvaluationValidatorEntity, EvaluationApplyEntity, EvaluationUxEntity, EvaluationMcpEntity])
+    TypeOrmModule.forFeature([ChatMessageEntity, EvaluationDiffEntity, EvaluationValidatorEntity, EvaluationApplyEntity, EvaluationUxEntity, EvaluationMcpEntity, EvaluationModelEntity])
   ],
   controllers: [DialogAmqpController, SpecificationDialogController, SpecificationMaintainerController, EvaluationController, EvaluationAmqpController],
   providers: [

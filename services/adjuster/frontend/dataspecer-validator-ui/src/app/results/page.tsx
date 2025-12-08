@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { DetectedChangesDto, SuggestionsDto, DetectedChange, ChangeType } from '../services/api'
+import { DetectedChangesDto, SuggestionsDto, DetectedChange, ChangeType, api, DiffQualityResultDto } from '../services/api'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
 
@@ -14,11 +14,27 @@ export default function ResultsPage() {
   const [selectedChangeId, setSelectedChangeId] = useState<string | null>(null)
   const [highlightMap, setHighlightMap] = useState<{ [key: number]: DetectedChange }>({})
   const router = useRouter()
+  const [runId, setRunId] = useState<string>('')
+  const [labels, setLabels] = useState<Record<string, 'tp' | 'fp' | 'none'>>({})
+  const [fnAddition, setFnAddition] = useState<number>(0)
+  const [fnRemoval, setFnRemoval] = useState<number>(0)
+  const [fnRename, setFnRename] = useState<number>(0)
+  const [fnTypeChange, setFnTypeChange] = useState<number>(0)
+  const [evalSaving, setEvalSaving] = useState<boolean>(false)
+  const [evalResult, setEvalResult] = useState<DiffQualityResultDto | null>(null)
+  const [evalError, setEvalError] = useState<string | null>(null)
 
   useEffect(() => {
     const storedChanges = sessionStorage.getItem('detectedChanges')
     const storedSuggestions = sessionStorage.getItem('suggestions')
     const storedSchema = sessionStorage.getItem('originalSchema')
+    // Initialize or reuse runId
+    let rid = sessionStorage.getItem('adjusterRunId')
+    if (!rid) {
+      rid = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+      sessionStorage.setItem('adjusterRunId', rid)
+    }
+    setRunId(rid || '')
 
     if (!storedChanges || !storedSuggestions || !storedSchema) {
       setError('No results found. Please upload files first.')
@@ -36,6 +52,11 @@ export default function ResultsPage() {
       setChanges(parsedChanges)
       setSuggestions(parsedSuggestions)
       setSchema(storedSchema)
+      const initial: Record<string, 'tp' | 'fp' | 'none'> = {}
+      for (const c of (parsedChanges.changes as DetectedChange[])) {
+        initial[c.changeId] = 'none'
+      }
+      setLabels(initial)
     } catch (err) {
       console.error('Error parsing stored data:', err)
       setError('Error loading results. Please try again.')
@@ -186,6 +207,59 @@ export default function ResultsPage() {
     });
   };
 
+  function primaryTypeOf(change: DetectedChange): 'addition' | 'removal' | 'rename' | 'type-change' {
+    const arr = Array.isArray(change.type) ? change.type : [change.type]
+    const sarr = arr.map(t => (typeof t === 'string' ? t : String(t))).map(s => s.toLowerCase())
+    if (sarr.includes('addition')) return 'addition'
+    if (sarr.includes('removal')) return 'removal'
+    if (sarr.includes('rename')) return 'rename'
+    return 'type-change'
+  }
+
+  function markSelected(as: 'tp' | 'fp') {
+    if (!selectedChangeId) return
+    setLabels(prev => ({ ...prev, [selectedChangeId]: as }))
+  }
+
+  async function computeAndStoreEvaluation() {
+    if (!changes) return
+    setEvalError(null)
+    setEvalResult(null)
+    setEvalSaving(true)
+    try {
+      const predicted = changes.changes.map(c => ({
+        id: c.changeId,
+        type: primaryTypeOf(c),
+        path: c.path || '',
+      }))
+      const gold: Array<{ id: string; type: 'addition' | 'removal' | 'rename' | 'type-change'; path: string }> = []
+      for (const c of changes.changes) {
+        if (labels[c.changeId] === 'tp') {
+          gold.push({ id: c.changeId, type: primaryTypeOf(c), path: c.path || '' })
+        }
+      }
+      const pushFn = (type: 'addition' | 'removal' | 'rename' | 'type-change', count: number) => {
+        for (let i = 0; i < Math.max(0, count | 0); i++) {
+          gold.push({ id: `fn-${type}-${i + 1}`, type, path: `$.fn.${type}.${i + 1}` })
+        }
+      }
+      pushFn('addition', fnAddition)
+      pushFn('removal', fnRemoval)
+      pushFn('rename', fnRename)
+      pushFn('type-change', fnTypeChange)
+      const resp = await api.submitEvaluationDiff({ runId, gold, predicted } as any)
+      if (resp.error) {
+        setEvalError(resp.error)
+      } else {
+        setEvalResult(resp.data as DiffQualityResultDto)
+      }
+    } catch (e: any) {
+      setEvalError(e?.message || 'Failed to compute evaluation')
+    } finally {
+      setEvalSaving(false)
+    }
+  }
+
   if (error) {
     return (
       <div className="min-h-screen bg-zinc-900 py-12 px-4 sm:px-6 lg:px-8">
@@ -290,13 +364,32 @@ export default function ResultsPage() {
           <span className="font-bold text-lg text-white">Dataspecer</span>
           <span className="text-lg text-gray-300">Adjuster</span>
         </div>
-        <button
-          onClick={() => router.push('/')}
-          className="px-4 py-2 rounded text-white font-medium"
-          style={{ background: '#636E83' }}
-        >
-          Reimport
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => router.push('/evaluation/diff')}
+            className="px-4 py-2 rounded text-white font-medium"
+            style={{ background: '#2563EB' }}
+          >
+            Evaluate Diff
+          </button>
+          <button
+            onClick={() => {
+              const d = changes?.dialogId ? `?dialogId=${encodeURIComponent(changes.dialogId)}` : '';
+              router.push(`/evaluation/ux${d}`);
+            }}
+            className="px-4 py-2 rounded text-white font-medium"
+            style={{ background: '#16A34A' }}
+          >
+            UX Survey
+          </button>
+          <button
+            onClick={() => router.push('/')}
+            className="px-4 py-2 rounded text-white font-medium"
+            style={{ background: '#636E83' }}
+          >
+            Reimport
+          </button>
+        </div>
       </nav>
       <div className="flex flex-1 min-h-0">
         <div className="w-1/2 border-r border-zinc-800 flex flex-col min-h-0">
@@ -350,6 +443,13 @@ export default function ResultsPage() {
                 {selectedChange.groupId && (
                   <div className="mb-2 text-gray-200">Group ID: {selectedChange.groupId}</div>
                 )}
+                <div className="mb-3">
+                  <div className="text-sm text-gray-300 mb-1">Mark this detection</div>
+                  <div className="flex gap-2">
+                    <button onClick={() => markSelected('tp')} className={`px-3 py-1 rounded ${labels[selectedChange.changeId] === 'tp' ? 'bg-green-600 text-white' : 'bg-zinc-700 text-gray-200 hover:bg-zinc-600'}`}>TP</button>
+                    <button onClick={() => markSelected('fp')} className={`px-3 py-1 rounded ${labels[selectedChange.changeId] === 'fp' ? 'bg-red-600 text-white' : 'bg-zinc-700 text-gray-200 hover:bg-zinc-600'}`}>FP</button>
+                  </div>
+                </div>
                 {selectedSuggestion && (
                   <>
                     <div className="mb-2 text-gray-200">Suggestion: {selectedSuggestion.suggestion}</div>
@@ -364,6 +464,39 @@ export default function ResultsPage() {
             )}
           </div>
           <div className="p-6 pt-4 flex-shrink-0">
+            <div className="mb-4 bg-zinc-800 border border-zinc-700 rounded p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-sm text-gray-300">Run ID</div>
+                <div className="text-xs text-gray-500">{runId}</div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">FN (addition)</label>
+                  <input type="number" min={0} value={fnAddition} onChange={e => setFnAddition(Number(e.target.value))} className="w-full bg-zinc-700 rounded px-2 py-1 text-sm outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">FN (removal)</label>
+                  <input type="number" min={0} value={fnRemoval} onChange={e => setFnRemoval(Number(e.target.value))} className="w-full bg-zinc-700 rounded px-2 py-1 text-sm outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">FN (rename)</label>
+                  <input type="number" min={0} value={fnRename} onChange={e => setFnRename(Number(e.target.value))} className="w-full bg-zinc-700 rounded px-2 py-1 text-sm outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">FN (type-change)</label>
+                  <input type="number" min={0} value={fnTypeChange} onChange={e => setFnTypeChange(Number(e.target.value))} className="w-full bg-zinc-700 rounded px-2 py-1 text-sm outline-none" />
+                </div>
+              </div>
+              <div className="mt-3 flex items-center gap-3">
+                <button onClick={computeAndStoreEvaluation} disabled={evalSaving} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50">{evalSaving ? 'Saving...' : 'Compute & Store'}</button>
+                {evalError && <span className="text-red-400 text-sm">{evalError}</span>}
+                {evalResult && (
+                  <span className="text-green-400 text-sm">
+                    Saved. Micro F1: {evalResult.microAveraged.f1.toFixed(3)}
+                  </span>
+                )}
+              </div>
+            </div>
             <button
               onClick={() => router.push('/')}
               className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white"

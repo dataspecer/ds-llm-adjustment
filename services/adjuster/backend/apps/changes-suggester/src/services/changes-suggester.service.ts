@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject } from '@nestjs/common';
+import { ClientProxy } from '@nestjs/microservices';
 import { SuggestionInputDto } from '@app/common/dto/suggestion-input.dto';
 import { SuggestionsDto, Suggestion } from '@app/common/dto/suggestions.dto';
 import { ChatOpenAI } from '@langchain/openai';
@@ -11,12 +12,29 @@ import { extractKeywordsFromChanges, selectRelevantPsmContext, selectRelevantRdf
 @Injectable()
 export class ChangesSuggesterService implements ChangesSuggesterServiceInterface {
 
+  public constructor(
+    @Inject('EVALUATION') private readonly evaluationClient: ClientProxy,
+  ) {}
+
   public async suggest(dto: SuggestionInputDto): Promise<SuggestionsDto> {
+    const { pickGpt5Model } = await import('@app/common/evaluation/model');
+    const modelName: 'gpt-5' | 'gpt-5-mini' | 'gpt-5-nano' = pickGpt5Model();
     const model = new ChatOpenAI({
-      model: "gpt-4.1",
+      model: modelName,
       temperature: 0,
       apiKey: process.env.OPENAI_API_KEY,
     });
+    // emit model selection event
+    const runId: string | undefined = (dto as any).runId;
+    if (runId) {
+      this.evaluationClient.emit('evaluation.model', {
+        runId,
+        service: 'changes-suggester',
+        operation: 'suggest',
+        modelName,
+        timestamp: new Date().toISOString(),
+      }).subscribe({ error: () => {} });
+    }
 
     // Select relevant chunks from PSM to keep token usage bounded
     const MAX_PSM_CONTEXT_CHARS: number = 3000;

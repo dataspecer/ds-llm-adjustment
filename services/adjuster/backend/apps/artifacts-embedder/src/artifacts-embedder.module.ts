@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ClientsModule, Transport } from '@nestjs/microservices';
-import { ScheduleModule } from '@nestjs/schedule';
 import { EmbeddingsService } from './services/embeddings.service';
 import { ArtifactsHttpController } from './controllers/http/artifacts.http.controller';
 import { ArtifactsAmqpController } from './controllers/amqp/artifacts.amqp.controller';
@@ -14,7 +13,6 @@ import { QdrantService } from './services/qdrant.service';
     ConfigModule.forRoot({
       isGlobal: true,
     }),
-    ScheduleModule.forRoot(),
     ClientsModule.register([
       {
         name: 'DATASPECER_ADAPTER',

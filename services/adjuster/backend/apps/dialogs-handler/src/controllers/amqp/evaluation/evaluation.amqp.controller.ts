@@ -4,6 +4,7 @@ import { EvaluationService } from '../../../services/evaluation/evaluation.servi
 import { ValidatorCheckEventDto } from '@app/common/dto/evaluation/validator-check.dto';
 import { ApplyMetricEventDto } from '@app/common/dto/evaluation/apply-metric.dto';
 import { McpSafetyEventDto } from '@app/common/dto/evaluation/mcp-safety.dto';
+import { ModelSelectionEventDto } from '@app/common/dto/evaluation/model-event.dto';
 
 @Controller()
 export class EvaluationAmqpController {
@@ -28,6 +29,14 @@ export class EvaluationAmqpController {
   @EventPattern('evaluation.mcp')
   public async onMcp(@Payload() payload: McpSafetyEventDto, @Ctx() ctx: RmqContext): Promise<void> {
     await this.evaluationService.storeMcpSafety(payload);
+    const channel = ctx.getChannelRef();
+    const originalMsg = ctx.getMessage();
+    channel.ack(originalMsg);
+  }
+
+  @EventPattern('evaluation.model')
+  public async onModel(@Payload() payload: ModelSelectionEventDto, @Ctx() ctx: RmqContext): Promise<void> {
+    await this.evaluationService.storeModelSelection(payload);
     const channel = ctx.getChannelRef();
     const originalMsg = ctx.getMessage();
     channel.ack(originalMsg);

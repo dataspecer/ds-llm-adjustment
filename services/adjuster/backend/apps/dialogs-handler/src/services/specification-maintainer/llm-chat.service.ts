@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject } from '@nestjs/common';
+import { ClientProxy } from '@nestjs/microservices';
 import { ChatOpenAI } from '@langchain/openai';
 import { HumanMessage, SystemMessage, AIMessage } from '@langchain/core/messages';
 import { SchemaChangeDto } from '../../dto/schema-change.dto';
@@ -13,12 +14,22 @@ export class LlmChatService {
   private readonly llm: ChatOpenAI;
   private readonly conversations = new Map<string, ChatConversation>();
 
-  constructor() {
+  constructor(@Inject('EVALUATION') private readonly evaluationClient: ClientProxy) {
+    const pick = require('@app/common/evaluation/model') as any;
+    const modelName = (pick.pickGpt5Model && pick.pickGpt5Model()) || 'gpt-5-mini';
     this.llm = new ChatOpenAI({
-      modelName: 'gpt-4o-mini', // Cost-effective model for chat
+      modelName,
       temperature: 0.7,
       openAIApiKey: process.env.OPENAI_API_KEY,
     });
+    // Emit a generic chat model selection event with a generated runId seed
+    this.evaluationClient.emit('evaluation.model', {
+      runId: `chat-${Date.now()}-${Math.random().toString(36).slice(2,9)}`,
+      service: 'dialogs-handler',
+      operation: 'llm-chat.init',
+      modelName,
+      timestamp: new Date().toISOString(),
+    }).subscribe({ error: () => {} });
   }
 
   /**
@@ -26,6 +37,18 @@ export class LlmChatService {
    */
   async startChat(startChatDto: StartChatDto): Promise<ChatConversation> {
     const conversationId: string = this.generateId();
+    // Emit model selection tied to conversation as runId
+    try {
+      const pick = require('@app/common/evaluation/model') as any;
+      const modelName = (this.llm as any)?.modelName || (pick.pickGpt5Model && pick.pickGpt5Model()) || 'gpt-5-mini';
+      this.evaluationClient.emit('evaluation.model', {
+        runId: conversationId,
+        service: 'dialogs-handler',
+        operation: 'llm-chat.start',
+        modelName,
+        timestamp: new Date().toISOString(),
+      }).subscribe({ error: () => {} });
+    } catch {}
     
     const systemPrompt: string = this.buildSystemPrompt(startChatDto.changes);
     const initialUserPrompt: string = startChatDto.initialPrompt || this.buildInitialPrompt(startChatDto.changes);

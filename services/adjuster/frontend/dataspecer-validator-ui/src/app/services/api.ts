@@ -336,6 +336,9 @@ class Api {
       }
 
       const data = await response.json();
+      try {
+        if (data?.runId) sessionStorage.setItem('adjusterRunId', data.runId);
+      } catch {}
       console.log('detectChangesAutomatic response data:', data);
       return { data };
     } catch (error) {
@@ -386,6 +389,9 @@ class Api {
       }
 
       const data = await response.json();
+      try {
+        if (data?.runId) sessionStorage.setItem('adjusterRunId', data.runId);
+      } catch {}
       console.log('Response data:', data);
       return { data };
     } catch (error) {
@@ -401,6 +407,7 @@ class Api {
     psm: string
   ): Promise<ApiResponse<SuggestionsDto>> {
     try {
+      const runId = (() => { try { return sessionStorage.getItem('adjusterRunId') || undefined } catch { return undefined } })();
       const response = await fetch(`${this.changesSuggesterUrl}/api/suggestions`, {
         method: 'POST',
         headers: {
@@ -409,6 +416,7 @@ class Api {
         body: JSON.stringify({
           changes: changes.changes,
           dialogId: changes.dialogId,
+          runId,
           psm,
         }),
       });
@@ -418,6 +426,9 @@ class Api {
       }
 
       const data = await response.json();
+      try {
+        if (data?.runId) sessionStorage.setItem('adjusterRunId', data.runId);
+      } catch {}
       return { data };
     } catch (error) {
       return {

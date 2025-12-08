@@ -26,7 +26,7 @@
   "dependencies": {
     "@langchain/core": "^0.3.68",
     "@langchain/openai": "^0.6.7",
-    "@nestjs/schedule": "^4.1.0",
+    "@nestjs/schedule": "^5.0.0",
     "@nestjs/common": "^11.1.6",
     "@nestjs/config": "^4.0.2",
     "@nestjs/core": "^11.1.6",

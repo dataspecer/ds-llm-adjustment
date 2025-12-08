@@ -11,6 +11,8 @@ import { ValidatorCheckEventDto } from '@app/common/dto/evaluation/validator-che
 import { ApplyMetricEventDto } from '@app/common/dto/evaluation/apply-metric.dto';
 import { UxSurveyDto } from '@app/common/dto/evaluation/ux-survey.dto';
 import { McpSafetyEventDto } from '@app/common/dto/evaluation/mcp-safety.dto';
+import { EvaluationModelEntity } from '../../entities/evaluation-model.entity';
+import { ModelSelectionEventDto } from '@app/common/dto/evaluation/model-event.dto';
 
 @Injectable()
 export class EvaluationService {
@@ -20,6 +22,7 @@ export class EvaluationService {
     @InjectRepository(EvaluationApplyEntity) private readonly applyRepo: Repository<EvaluationApplyEntity>,
     @InjectRepository(EvaluationUxEntity) private readonly uxRepo: Repository<EvaluationUxEntity>,
     @InjectRepository(EvaluationMcpEntity) private readonly mcpRepo: Repository<EvaluationMcpEntity>,
+    @InjectRepository(EvaluationModelEntity) private readonly modelRepo: Repository<EvaluationModelEntity>,
   ) {}
 
   public async storeDiffMetrics(result: DiffQualityResultDto): Promise<void> {
@@ -77,6 +80,15 @@ export class EvaluationService {
       auditId: evt.auditId ?? null,
       issuesCount: evt.issuesCount ?? null,
       ok: evt.ok ?? null,
+    });
+  }
+
+  public async storeModelSelection(evt: ModelSelectionEventDto): Promise<void> {
+    await this.modelRepo.save({
+      runId: evt.runId,
+      service: evt.service,
+      operation: evt.operation,
+      modelName: evt.modelName,
     });
   }
 }

@@ -4,6 +4,10 @@ export class DetectChangesDto {
   @IsString()
   dialogId: string;
 
+  @IsOptional()
+  @IsString()
+  runId?: string;
+
   @IsString()
   oldApi: string;
 
@@ -27,6 +31,10 @@ export class DetectChangesFromIriDto {
   @IsString()
   dialogId: string;
 
+  @IsOptional()
+  @IsString()
+  runId?: string;
+
   @IsString()
   psmIri: string;
 
@@ -45,6 +53,10 @@ export class DetectChangesHybridDto {
   @IsString()
   public dialogId: string;
 
+  @IsOptional()
+  @IsString()
+  public runId?: string;
+
   @IsString()
   public psmIri: string;
 
@@ -62,6 +74,10 @@ export class DetectChangesHybridDto {
 export class DetectChangesAutomaticDto {
   @IsString()
   public dialogId: string;
+
+  @IsOptional()
+  @IsString()
+  public runId?: string;
 
   @IsString()
   public dataSpecificationIri: string;

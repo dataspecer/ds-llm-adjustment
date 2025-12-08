@@ -107,7 +107,153 @@ For an \textit{LLM Operator (via MCP)}, an MCP-compatible client can discover th
 
 
 \section{C4 model}
-% (PLACEHOLDER, pridam pozdeji)
+This section presents the overall architecture of the Dataspecer Adjuster in the
+C4 notation. The solution is conceived as a cloud–hosted companion service to
+Dataspecer that mediates between software engineers, specification maintainers,
+the Dataspecer platform, and an external large language model (LLM). It
+implements the functional requirements from Section User Stories such as
+structured differencing of JSON Schemas, change classification, and
+LLM-supported explanation and negotiation of updates.
+\subsection{Software Systems Layer}
+Figure~\ref{fig:c4-system-context} shows the high-level system context. Two
+primary human roles interact with the system:
+
+\begin{itemize}
+  \item \textbf{Developer} -- a software engineer responsible for evolving APIs
+  and data models. The developer uses the Adjuster when a JSON Schema (or a set
+  of schemas) changes and needs to be reconciled with an existing Dataspecer
+  specification.
+
+  \item \textbf{Manager / Maintainer} -- a specification maintainer or domain
+  expert responsible for the long-term quality of semantic data specifications.
+  This role is typically the final decision maker for accepting or rejecting
+  proposed changes.
+\end{itemize}
+
+Both roles access the \emph{Dataspecer Adjuster} through a web interface. The
+Adjuster is modelled as an independent software system / cloud service that
+mediates between:
+
+\begin{itemize}
+  \item the \textbf{LLM service}, used to interpret detected schema changes,
+  generate natural-language rationales, and support dialog-based negotiation of
+  updates; and
+
+  \item the \textbf{Dataspecer} platform, which stores the authoritative
+  semantic specifications (vocabularies, application profiles and derived
+  technical artifacts). The Adjuster reads existing specifications and, after a
+  maintainer approves a change set, issues the corresponding update requests
+  back to Dataspecer.
+\end{itemize}
+
+In a typical scenario, a developer uploads or references a changed JSON Schema,
+the Adjuster analyses the differences with respect to the existing
+specification, and the maintainer reviews and validates the suggested updates.
+The LLM is always used in a bounded, recommendation-only role, while Dataspecer
+remains the source of truth for published specifications.
+\begin{figure}[t]
+  \includegraphics[width=0.8\textwidth]{img/c4-1.png}
+  \caption{C4 system context diagram of the Dataspecer Adjuster.}
+  \label{fig:c4-system-context}
+\end{figure}
+
+\subsection{Containers Layer}
+Figure~\ref{fig:c4-containers} refines the Adjuster system into a set of
+containers. These containers may be deployed as separate microservices or as
+modules within the same runtime, but they represent distinct responsibilities.
+
+\paragraph{SPA Web Application.}
+The primary entry point for both developers and maintainers is a single-page
+web application implemented in React. It provides:
+
+\begin{itemize}
+  \item an overview of detected changes between JSON Schemas and existing
+  specifications;
+  \item detail views for each change, including structured metadata and
+  LLM-generated explanations; and
+  \item an interactive dialog interface where the maintainer can ask follow-up
+  questions and accept, reject, or modify proposed updates.
+\end{itemize}
+
+The SPA communicates with the backend containers via HTTP APIs.
+
+\paragraph{Dialog Service.}
+The Dialog Service orchestrates the overall workflow for a comparison session.
+It invokes the Changes Detector to compute a structured diff, orchestrates
+calls to the LLM-backed Changes Suggester/Interpreter, and persists the dialog
+state and decisions to the database. Conceptually, this container implements
+most of the process logic for the requirements ``schema ingestion'',
+``structured differencing'', and ``review UI''.
+
+\paragraph{Changes Detector.}
+The Changes Detector is a NestJS-based container that focuses on deterministic
+analysis of JSON Schemas. It computes property-level differences, classifies
+them into categories such as additions, removals, and refinements, and
+normalises the representation so that it can be safely consumed by the LLM.
+Different detector variants can be plugged in (e.g.\ diffing at different
+depths or including additional static analyses).
+
+\paragraph{Changes Suggester / Interpreter.}
+This container acts as the LLM gateway. It encapsulates prompts,
+few-shot examples, and output normalisation for several usage modes, such as
+working purely from the diff, or using additional retrieved context. The
+Suggester/Interpreter:
+
+\begin{itemize}
+  \item calls the external LLM API,
+  \item interprets the model outputs into structured suggestions (e.g.\ how to
+  update PSM classes and properties in Dataspecer), and
+  \item generates natural-language rationales that are displayed in the UI.
+\end{itemize}
+
+By isolating LLM interaction into a dedicated container, the architecture
+supports experimentation with different prompting strategies and models without
+affecting the rest of the system.
+
+\paragraph{Dataspecer Adapter and MCP Adapter.}
+To interact with Dataspecer, the Adjuster uses a dedicated Dataspecer Adapter
+container. This adapter hides protocol details (such as the specific REST or
+GraphQL APIs) and translates internal change representations into concrete
+operations on Dataspecer artifacts. In addition, an MCP (Model Context
+Protocol) Adapter exposes Dataspecer resources as tools to the Adjuster, which
+enables the Dialog Service and LLM to retrieve relevant specification fragments
+on demand while keeping Dataspecer itself unchanged.
+
+\paragraph{Artifacts Embedder and Vector Database.}
+For larger specifications, the system relies on retrieval-augmented generation.
+The Artifacts Embedder container periodically extracts relevant fragments
+(JSON Schemas, PSM models, documentation) from Dataspecer, computes vector
+representations, and stores them in a Qdrant-based vector database. During a
+dialog session, the Dialog Service retrieves semantically similar artifacts and
+provides them as additional context to the Changes Suggester/Interpreter.
+
+\paragraph{Relational Database.}
+A relational database (PostgreSQL in production, SQLite in local development)
+stores comparison sessions, detected changes, user decisions, and audit logs.
+This persistence layer allows repeatable evaluation of LLM behaviour and
+supports later analysis of how maintainers actually adjust specifications over
+time.
+
+\paragraph{LLM Service.}
+The external LLM is modelled as a separate software system accessed via a
+cloud API. The Adjuster containers never expose raw specification data
+directly to the end users; instead, they route carefully prepared prompts and
+post-process responses. In line with the thesis focus, the LLM is used as a
+recommendation and summarisation component, while correctness and consistency
+are guarded by the deterministic detectors and the human maintainer.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\textwidth]{img/c4-2.png}
+  \caption{C4 container diagram of the Dataspecer Adjuster.}
+  \label{fig:c4-containers}
+\end{figure}
+
+Overall, this architecture separates deterministic schema analysis from
+LLM-based interpretation and user interaction, while maintaining a clear
+boundary to the Dataspecer platform. This separation is crucial for evaluating
+different LLM prompting strategies and for preserving Dataspecer as the
+authoritative source of semantic data specifications.
 
 \section{Used technologies}
 
@@ -218,9 +364,6 @@ This protects early investment while opening a path to richer semantics and neur
 
 \subsection*{Fit to evaluation and stakeholder needs}
 The architecture surfaces measurable artefacts at each stage (diffs, typed actions, validator reports), directly enabling the planned metrics: precision/recall per change type, round-trip conformance, apply success, helpfulness, and MCP safety indicators. It also mirrors how maintainers and developers currently reason about change (properties, required, enums), increasing adoption likelihood.
-
-\section{Deployment diagram}
-% (PLACEHOLDER, pridam pozdeji)
 
 \section{Evaluation}
 The evaluation probes four aspects. First, \textit{diff and classification quality}: we compute precision, recall, and F$_1$ for add/remove/modify/rename against a curated gold standard. Second, \textit{validator quality}: we check JSON Schema syntactic validity and round-trip conformance before and after applying changes. Third, \textit{apply success}: we report the share of accepted actions that translate cleanly into PSM operations without validator failures. Fourth, \textit{UX and safety}: we gather Likert-scale helpfulness ratings and SUS scores for the review UI, and we monitor MCP safety indicators such as the proportion of mutating operations preceded by \texttt{preview\_apply}, the number of blocked attempts by schema guardrails, and the completeness of the audit trail.

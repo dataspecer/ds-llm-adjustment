@@ -29,6 +29,15 @@ import { ChangesDetectorAmqpController } from './controllers/changes-detector.am
           queueOptions: { durable: true },
         },
       },
+      {
+        name: 'EVALUATION',
+        transport: Transport.RMQ,
+        options: {
+          urls: [process.env.RABBITMQ_URL as string],
+          queue: 'dialogs_handler_queue',
+          queueOptions: { durable: true },
+        },
+      },
     ]),
   ],
   controllers: [ChangesDetectorController, ChangesDetectorAmqpController],

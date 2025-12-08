@@ -195,6 +195,21 @@ services:
       retries: 3
     networks:
       - adjuster-network
+ 
+   pgadmin:
+     image: dpage/pgadmin4:latest
+     container_name: adjuster-pgadmin
+     environment:
+       - PGADMIN_DEFAULT_EMAIL=admin@local.dev
+       - PGADMIN_DEFAULT_PASSWORD=admin
+     ports:
+       - "5050:80"
+     depends_on:
+       - postgres
+     volumes:
+       - pgadmin_data:/var/lib/pgadmin
+     networks:
+       - adjuster-network
 
   rabbitmq:
     image: rabbitmq:3-management-alpine
@@ -224,6 +239,8 @@ volumes:
   postgres_data:
     driver: local
   qdrant_storage:
+    driver: local
+  pgadmin_data:
     driver: local
 
 networks:

@@ -20,6 +20,11 @@ export class ArtifactsAmqpController {
   public async search(@Payload() payload: { query: string; k?: number; filter?: { psmIri?: string; dataSpecificationIri?: string } }) {
     return this._artifactsService.search(payload.query, payload.k || 5, payload.filter || {});
   }
+
+  @MessagePattern('artifacts.refresh.all')
+  public async refreshAll() {
+    return this._artifactsService.refreshAll();
+  }
 }
 
 

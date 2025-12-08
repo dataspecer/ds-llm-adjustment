@@ -28,6 +28,13 @@ export class ArtifactsHttpController {
     return { embedded };
   }
 
+  @Post('embed/dataspecer-all')
+  @ApiOperation({ summary: 'Embed all Data Specifications and PSMs from Dataspecer' })
+  @ApiOkResponse({ description: 'Bulk embedding completed' })
+  public async embedAllFromDataspecer(): Promise<{ embedded: number; specs: number; psm: number }> {
+    return this._artifactsService.refreshAll();
+  }
+
   @Get('search')
   @ApiOperation({ summary: 'Semantic search over embedded artifacts' })
   @ApiOkResponse({ description: 'Search results' })
