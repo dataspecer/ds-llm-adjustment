@@ -19,7 +19,6 @@ export class LlmChatService {
     const modelName = (pick.pickGpt5Model && pick.pickGpt5Model()) || 'gpt-5-mini';
     this.llm = new ChatOpenAI({
       modelName,
-      temperature: 0.7,
       openAIApiKey: process.env.OPENAI_API_KEY,
     });
     // Emit a generic chat model selection event with a generated runId seed

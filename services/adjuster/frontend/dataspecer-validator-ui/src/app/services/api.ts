@@ -181,10 +181,10 @@ export interface SendMessageDto {
 }
 
 class Api {
-  private changesDetectorUrl = process.env.NEXT_PUBLIC_CHANGES_DETECTOR_URL || 'http://localhost:3000/detector';
-  private changesSuggesterUrl = process.env.NEXT_PUBLIC_CHANGES_SUGGESTER_URL || 'http://localhost:3000/suggester';
-  private dialogHandlerUrl = process.env.NEXT_PUBLIC_DIALOG_HANDLER_URL || 'http://localhost:3000/dialogs-handler';
-  private dataspecerBackendUrl = process.env.NEXT_PUBLIC_DATASPECER_BACKEND || 'http://localhost:3000/dataspecer';
+  private changesDetectorUrl = process.env.NEXT_PUBLIC_CHANGES_DETECTOR_URL || 'http://ulianov-diploma-dataspecer.westeurope.cloudapp.azure.com/detector';
+  private changesSuggesterUrl = process.env.NEXT_PUBLIC_CHANGES_SUGGESTER_URL || 'http://ulianov-diploma-dataspecer.westeurope.cloudapp.azure.com/suggester';
+  private dialogHandlerUrl = process.env.NEXT_PUBLIC_DIALOG_HANDLER_URL || 'http://ulianov-diploma-dataspecer.westeurope.cloudapp.azure.com/dialogs-handler';
+  private dataspecerBackendUrl = process.env.NEXT_PUBLIC_DATASPECER_BACKEND || 'http://ulianov-diploma-dataspecer.westeurope.cloudapp.azure.com/dataspecer';
 
   // ===== Evaluation API =====
   async submitEvaluationDiff(payload: DiffQualityInputDto): Promise<ApiResponse<DiffQualityResultDto>> {

@@ -122,7 +122,7 @@ const Row = ({ iri, parentIri }: { iri: string, parentIri?: string }) => {
         window.location.href = import.meta.env.VITE_DATA_SPECIFICATION_EDITOR + "/editor?data-specification=" + encodeURIComponent(parentIri ?? "") + "&data-psm-schema=" + encodeURIComponent(iri);
       }}>{t("open")}</Button>}
       {resource.types.includes(V1.PSM) && <Button asChild variant={"ghost"} onClick={stopPropagation()}>
-        <a href={(import.meta.env.VITE_VALIDATOR_UI || "http://localhost:3000") + "/specification-maintainer/?mode=maintainer&data-psm-schema=" + encodeURIComponent(iri) + "&data-specification=" + encodeURIComponent(parentIri || "")}>
+        <a href={(import.meta.env.VITE_VALIDATOR_UI || "https://ulianov-diploma-dataspecer.westeurope.cloudapp.azure.com") + "/specification-maintainer/?mode=maintainer&data-psm-schema=" + encodeURIComponent(iri) + "&data-specification=" + encodeURIComponent(parentIri || "")}>
           {t("validate")}
         </a>
       </Button>}

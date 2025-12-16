@@ -40,7 +40,6 @@ export class SpecificationProcessorService {
     const modelName = pickGpt5Model();
     const model = new ChatOpenAI({
       model: modelName,
-      temperature: 0,
       apiKey: process.env.OPENAI_API_KEY,
     });
     this.evaluationClient.emit('evaluation.model', {
@@ -74,7 +73,6 @@ export class SpecificationProcessorService {
     const modelName = pickGpt5Model();
     const model = new ChatOpenAI({
       model: modelName,
-      temperature: 0,
       apiKey: process.env.OPENAI_API_KEY,
     });
     this.evaluationClient.emit('evaluation.model', {
@@ -186,7 +184,6 @@ export class SpecificationProcessorService {
     const modelName = pickGpt5Model();
     const model: ChatOpenAI = new ChatOpenAI({
       model: modelName,
-      temperature: 0,
       apiKey: process.env.OPENAI_API_KEY,
     });
     this.evaluationClient.emit('evaluation.model', {

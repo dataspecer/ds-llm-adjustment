@@ -302,7 +302,7 @@ export class SpecificationMaintainerService {
     // In production, you would store this in a database and clean up old entries
     // For now, we'll just keep them in memory
 
-    const shareUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/shared/${storeDto.analysisId}`;
+    const shareUrl = `${process.env.FRONTEND_URL || 'http://ulianov-diploma-dataspecer.westeurope.cloudapp.azure.com'}/shared/${storeDto.analysisId}`;
 
     return {
       success: true,

@@ -21,7 +21,6 @@ export class ChangesSuggesterService implements ChangesSuggesterServiceInterface
     const modelName: 'gpt-5' | 'gpt-5-mini' | 'gpt-5-nano' = pickGpt5Model();
     const model = new ChatOpenAI({
       model: modelName,
-      temperature: 0,
       apiKey: process.env.OPENAI_API_KEY,
     });
     // emit model selection event

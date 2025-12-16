@@ -15,9 +15,9 @@ COPY package*.json ./
 COPY nest-cli.json ./
 COPY tsconfig*.json ./
 
-RUN npm ci --omit=dev && cp -r node_modules /tmp/prod_node_modules
+RUN npm i --omit=dev && cp -r node_modules /tmp/prod_node_modules
 
-RUN npm ci
+RUN npm i
 
 COPY . .
 

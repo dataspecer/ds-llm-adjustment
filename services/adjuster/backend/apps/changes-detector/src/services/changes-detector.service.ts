@@ -89,6 +89,7 @@ export class ChangesDetectorService implements ChangesDetectorServiceInterface {
     if (!dto.psm && dto.psmIri) {
       try {
         const dataspecerBaseUrl: string = this.getDataspecerBaseUrl();
+        console.log('dataspecerBaseUrl', dataspecerBaseUrl);
         const psm: string = await firstValueFrom(
           this.dataspecerAdapterClient.send('get.psm', {
             dataspecerBaseUrl,
@@ -159,7 +160,6 @@ export class ChangesDetectorService implements ChangesDetectorServiceInterface {
     const modelName: 'gpt-5' | 'gpt-5-mini' | 'gpt-5-nano' = pickGpt5Model();
     const model = new ChatOpenAI({
       model: modelName,
-      temperature: 0.1,
       maxTokens: 4000,
       apiKey: process.env.OPENAI_API_KEY,
     });
