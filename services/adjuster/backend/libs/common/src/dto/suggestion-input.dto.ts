@@ -9,6 +9,9 @@ export class SuggestionInputDto {
   @IsString()
   public runId?: string;
 
+  @IsOptional()
+  public useRag?: boolean;
+
   @IsArray()
   @ValidateNested({ each: true })
   public changes: DetectedChange[];

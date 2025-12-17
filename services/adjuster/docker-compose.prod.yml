@@ -197,9 +197,19 @@ services:
     networks:
       - adjuster-network
 
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    networks:
+      - adjuster-network
+
 volumes:
   postgres_data:
   pgadmin_data:
+  qdrant_storage:
 
 networks:
   adjuster-network:

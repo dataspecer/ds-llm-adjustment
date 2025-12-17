@@ -25,11 +25,14 @@ export class ChangesSuggesterService implements ChangesSuggesterServiceInterface
     });
     // emit model selection event
     const runId: string | undefined = (dto as any).runId;
+    // Randomly decide whether to use RAG by default; allow explicit override via dto.useRag
+    const randomUse: boolean = Math.random() < 0.5;
+    const useRag: boolean = typeof (dto as any).useRag === 'boolean' ? (dto as any).useRag : randomUse;
     if (runId) {
       this.evaluationClient.emit('evaluation.model', {
         runId,
         service: 'changes-suggester',
-        operation: 'suggest',
+        operation: useRag ? 'suggest.rag' : 'suggest.no_rag',
         modelName,
         timestamp: new Date().toISOString(),
       }).subscribe({ error: () => {} });
@@ -39,8 +42,10 @@ export class ChangesSuggesterService implements ChangesSuggesterServiceInterface
     const MAX_PSM_CONTEXT_CHARS: number = 3000;
     const MAX_ONTOLOGY_CONTEXT_CHARS: number = 2000;
     const keywords: string[] = extractKeywordsFromChanges(dto.changes as any);
-    const selectedPsm: string = selectRelevantPsmContext(dto.psm || '', keywords, MAX_PSM_CONTEXT_CHARS);
-    const selectedOntology: string = selectRelevantRdfContext(dto.ontology || '', keywords, MAX_ONTOLOGY_CONTEXT_CHARS);
+    const selectedPsmRaw: string = selectRelevantPsmContext(dto.psm || '', keywords, MAX_PSM_CONTEXT_CHARS);
+    const selectedOntologyRaw: string = selectRelevantRdfContext(dto.ontology || '', keywords, MAX_ONTOLOGY_CONTEXT_CHARS);
+    const selectedPsm: string = useRag ? selectedPsmRaw : '';
+    const selectedOntology: string = useRag ? selectedOntologyRaw : '';
 
     const prompt: ChatPromptTemplate = ChatPromptTemplate.fromTemplate(PROMPTS.changesSuggester.suggestionsTemplate);
 
