@@ -1098,13 +1098,6 @@ function SpecificationMaintainerContent() {
         </div>
         <div className="flex space-x-2">
           <button
-            onClick={() => router.push('/evaluation/diff')}
-            className="px-4 py-2 text-white rounded transition-colors"
-            style={{ background: '#2563EB' }}
-          >
-            Evaluate Diff
-          </button>
-          <button
             onClick={() => router.push(`/evaluation/ux${runId ? `?runId=${encodeURIComponent(runId)}` : ''}`)}
             className="px-4 py-2 text-white rounded transition-colors"
             style={{ background: '#16A34A' }}
@@ -1369,6 +1362,25 @@ function SpecificationMaintainerContent() {
                           className="w-full px-3 py-2 bg-zinc-700 border border-zinc-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                       </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">Satisfaction (1-10)</label>
+                        <div className="flex flex-wrap gap-2">
+                          {[1,2,3,4,5,6,7,8,9,10].map(v => (
+                            <button
+                              key={v}
+                              onClick={() => updateEditingChange('satisfaction', v)}
+                              className={`px-3 py-1 rounded text-sm ${
+                                editingChange.satisfaction === v
+                                  ? 'bg-purple-600 text-white'
+                                  : 'bg-zinc-700 text-gray-200 hover:bg-zinc-600'
+                              }`}
+                            >
+                              {v}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   ) : (
                     <div>
@@ -1384,6 +1396,7 @@ function SpecificationMaintainerContent() {
                           <span className="text-red-200">No ⚠</span>
                         )}
                       </div>
+                      <div className="mb-2 text-gray-200">Satisfaction: {selectedChange.satisfaction ?? '—'}</div>
                       {selectedChange.groupId && (
                         <div className="mb-2 text-gray-200">Group ID: {selectedChange.groupId}</div>
                       )}

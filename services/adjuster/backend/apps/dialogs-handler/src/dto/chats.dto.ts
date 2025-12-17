@@ -21,6 +21,7 @@ export interface ChatMessage {
     changeIds: string[];
     changes: SchemaChangeDto[];
     initialPrompt?: string;
+  runId?: string;
   }
   
   export interface SendMessageDto {

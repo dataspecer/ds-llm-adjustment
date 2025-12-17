@@ -102,6 +102,7 @@ export interface SchemaChangeDto {
   isProblematic: boolean;
   suggestion?: string;
   rationale?: string;
+  satisfaction?: number; // 1-10
 }
 
 export interface ChangeDecisionDto {
@@ -174,6 +175,7 @@ export interface StartChatDto {
   changeIds: string[];
   changes: SchemaChangeDto[];
   initialPrompt?: string;
+  runId?: string;
 }
 
 export interface SendMessageDto {
@@ -752,12 +754,26 @@ class Api {
    */
   async startChat(startChatDto: StartChatDto): Promise<ApiResponse<ChatConversation>> {
     try {
+      const ensuredRunId = (() => {
+        try {
+          let rid = sessionStorage.getItem('adjusterRunId') || undefined;
+          if (!rid) {
+            rid = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+            sessionStorage.setItem('adjusterRunId', rid);
+          }
+          return rid;
+        } catch {
+          // Fallback if sessionStorage is unavailable
+          return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+        }
+      })();
+      const body = { ...startChatDto, runId: startChatDto.runId || ensuredRunId };
       const response = await fetch(`${this.dialogHandlerUrl}/api/specifications/chats`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(startChatDto),
+        body: JSON.stringify(body),
       });
 
       if (!response.ok) {

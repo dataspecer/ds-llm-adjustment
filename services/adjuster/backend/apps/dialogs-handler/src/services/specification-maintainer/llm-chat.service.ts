@@ -21,14 +21,6 @@ export class LlmChatService {
       modelName,
       openAIApiKey: process.env.OPENAI_API_KEY,
     });
-    // Emit a generic chat model selection event with a generated runId seed
-    this.evaluationClient.emit('evaluation.model', {
-      runId: `chat-${Date.now()}-${Math.random().toString(36).slice(2,9)}`,
-      service: 'dialogs-handler',
-      operation: 'llm-chat.init',
-      modelName,
-      timestamp: new Date().toISOString(),
-    }).subscribe({ error: () => {} });
   }
 
   /**
@@ -36,12 +28,12 @@ export class LlmChatService {
    */
   async startChat(startChatDto: StartChatDto): Promise<ChatConversation> {
     const conversationId: string = this.generateId();
-    // Emit model selection tied to conversation as runId
+    const runId: string = startChatDto.runId || conversationId;
     try {
       const pick = require('@app/common/evaluation/model') as any;
       const modelName = (this.llm as any)?.modelName || (pick.pickGpt5Model && pick.pickGpt5Model()) || 'gpt-5-mini';
       this.evaluationClient.emit('evaluation.model', {
-        runId: conversationId,
+        runId,
         service: 'dialogs-handler',
         operation: 'llm-chat.start',
         modelName,
