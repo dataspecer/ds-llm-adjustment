@@ -2,32 +2,6 @@ version: '3.8'
 
 services:
 
-  ollama:
-    image: ollama/ollama:latest
-    container_name: adjuster-ollama
-    ports:
-      - "11434:11434"
-    environment:
-      - OLLAMA_KEEP_ALIVE=5m
-      - OLLAMA_MISTRAL_MODEL=${OLLAMA_MISTRAL_MODEL:-ministral-3:3b}
-    volumes:
-      - ollama_data:/root/.ollama
-    healthcheck:
-      test: ["CMD-SHELL", "curl -s http://localhost:11434/api/tags || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 10
-    networks:
-      - adjuster-network
-    command: >
-      /bin/sh -lc "
-      ollama serve &
-      until curl -sS http://localhost:11434/api/tags >/dev/null 2>&1; do sleep 1; done;
-      echo pulling ${OLLAMA_MISTRAL_MODEL};
-      ollama pull ${OLLAMA_MISTRAL_MODEL} || true;
-      wait
-      "
-
   dataspecer:
     build:
       context: ../../
@@ -79,13 +53,11 @@ services:
       - CORS_ORIGIN=http://localhost:3001
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - DATASPECER_BACKEND_URL=http://dataspecer:80
-      - OLLAMA_BASE_URL=http://ollama:11434
     env_file:
       - .env
     depends_on:
       - rabbitmq
       - dataspecer
-      - ollama
     volumes:
       - ./backend:/app
       - /app/node_modules
@@ -106,12 +78,10 @@ services:
       - RABBITMQ_PASSWORD=guest
       - CORS_ORIGIN=http://localhost:3001
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - OLLAMA_BASE_URL=http://ollama:11434
     env_file:
       - .env
     depends_on:
       - rabbitmq
-      - ollama
     volumes:
       - ./backend:/app
       - /app/node_modules
@@ -137,13 +107,11 @@ services:
       - RABBITMQ_PASSWORD=guest
       - CORS_ORIGIN=http://localhost:3001
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - OLLAMA_BASE_URL=http://ollama:11434
     env_file:
       - .env
     depends_on:
       - rabbitmq
       - postgres
-      - ollama
     volumes:
       - ./backend:/app
       - /app/node_modules
@@ -273,8 +241,6 @@ volumes:
   qdrant_storage:
     driver: local
   pgadmin_data:
-    driver: local
-  ollama_data:
     driver: local
 
 networks:
