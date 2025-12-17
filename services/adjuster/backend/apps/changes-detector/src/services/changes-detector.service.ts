@@ -156,20 +156,16 @@ export class ChangesDetectorService implements ChangesDetectorServiceInterface {
       console.log('Fallback diff length:', diffString.length);
     }
 
-    const { pickGpt5Model } = await import('@app/common/evaluation/model');
-    const modelName: 'gpt-5' | 'gpt-5-mini' | 'gpt-5-nano' = pickGpt5Model();
-    const model = new ChatOpenAI({
-      model: modelName,
-      maxTokens: 4000,
-      apiKey: process.env.OPENAI_API_KEY,
-    });
+    const { pickModel, createChatModel } = await import('@app/common/evaluation/model');
+    const modelVariant: any = pickModel();
+    const model: any = await createChatModel(modelVariant as any);
     // emit model selection event
     if (dto.runId) {
       this.evaluationClient.emit('evaluation.model', {
         runId: dto.runId,
         service: 'changes-detector',
         operation: 'detect',
-        modelName,
+        modelName: modelVariant,
         timestamp: new Date().toISOString(),
       }).subscribe({ error: () => {} });
     }

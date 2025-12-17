@@ -17,12 +17,9 @@ export class ChangesSuggesterService implements ChangesSuggesterServiceInterface
   ) {}
 
   public async suggest(dto: SuggestionInputDto): Promise<SuggestionsDto> {
-    const { pickGpt5Model } = await import('@app/common/evaluation/model');
-    const modelName: 'gpt-5' | 'gpt-5-mini' | 'gpt-5-nano' = pickGpt5Model();
-    const model = new ChatOpenAI({
-      model: modelName,
-      apiKey: process.env.OPENAI_API_KEY,
-    });
+    const { pickModel, createChatModel } = await import('@app/common/evaluation/model');
+    const modelVariant: any = pickModel();
+    const model: any = await createChatModel(modelVariant as any);
     // emit model selection event
     const runId: string | undefined = (dto as any).runId;
     if (runId) {
@@ -30,7 +27,7 @@ export class ChangesSuggesterService implements ChangesSuggesterServiceInterface
         runId,
         service: 'changes-suggester',
         operation: 'suggest',
-        modelName,
+        modelName: modelVariant,
         timestamp: new Date().toISOString(),
       }).subscribe({ error: () => {} });
     }

@@ -65,6 +65,7 @@ export class EvaluationService {
       role: survey.role,
       helpfulnessLikert: survey.helpfulnessLikert,
       susScore: survey.susScore ?? null,
+      susItems: Array.isArray(survey.susItems) ? survey.susItems : null,
       comments: survey.comments ?? null,
     });
   }

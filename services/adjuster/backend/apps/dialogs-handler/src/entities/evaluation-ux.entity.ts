@@ -22,6 +22,9 @@ export class EvaluationUxEntity {
   @Column({ type: 'int', nullable: true })
   susScore: number | null;
 
+  @Column({ type: 'jsonb', nullable: true })
+  susItems: number[] | null;
+
   @Column({ type: 'text', nullable: true })
   comments: string | null;
 

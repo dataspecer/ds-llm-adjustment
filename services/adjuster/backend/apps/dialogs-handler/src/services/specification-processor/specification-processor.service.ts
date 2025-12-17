@@ -36,17 +36,14 @@ export class SpecificationProcessorService {
   }
 
   private async processDescribeChanges(original: string, updated: string): Promise<string> {
-    const { pickGpt5Model } = await import('@app/common/evaluation/model');
-    const modelName = pickGpt5Model();
-    const model = new ChatOpenAI({
-      model: modelName,
-      apiKey: process.env.OPENAI_API_KEY,
-    });
+    const { pickModel, createChatModel } = await import('@app/common/evaluation/model');
+    const modelVariant = pickModel();
+    const model: any = await createChatModel(modelVariant as any);
     this.evaluationClient.emit('evaluation.model', {
       runId: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
       service: 'dialogs-handler',
       operation: 'specification-processor.describe',
-      modelName,
+      modelName: modelVariant,
       timestamp: new Date().toISOString(),
     }).subscribe({ error: () => {} });
 
@@ -69,17 +66,14 @@ export class SpecificationProcessorService {
     newSchema: string,
     psm: string
   ): Promise<ChatMessageEntity> {
-    const { pickGpt5Model } = await import('@app/common/evaluation/model');
-    const modelName = pickGpt5Model();
-    const model = new ChatOpenAI({
-      model: modelName,
-      apiKey: process.env.OPENAI_API_KEY,
-    });
+    const { pickModel, createChatModel } = await import('@app/common/evaluation/model');
+    const modelVariant = pickModel();
+    const model: any = await createChatModel(modelVariant as any);
     this.evaluationClient.emit('evaluation.model', {
       runId: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
       service: 'dialogs-handler',
       operation: 'specification-processor.schema-diff',
-      modelName,
+      modelName: modelVariant,
       timestamp: new Date().toISOString(),
     }).subscribe({ error: () => {} });
 
@@ -180,17 +174,14 @@ export class SpecificationProcessorService {
     artifactFormat: string,
     request: ChatMessageEntity
   ) {
-    const { pickGpt5Model } = await import('@app/common/evaluation/model');
-    const modelName = pickGpt5Model();
-    const model: ChatOpenAI = new ChatOpenAI({
-      model: modelName,
-      apiKey: process.env.OPENAI_API_KEY,
-    });
+    const { pickModel, createChatModel } = await import('@app/common/evaluation/model');
+    const modelVariant = pickModel();
+    const model: any = await createChatModel(modelVariant as any);
     this.evaluationClient.emit('evaluation.model', {
       runId: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
       service: 'dialogs-handler',
       operation: 'specification-processor.definitions',
-      modelName,
+      modelName: modelVariant,
       timestamp: new Date().toISOString(),
     }).subscribe({ error: () => {} });
 

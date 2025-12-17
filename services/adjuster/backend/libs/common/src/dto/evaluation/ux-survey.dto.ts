@@ -5,7 +5,8 @@ export interface UxSurveyDto {
   dialogId?: string;
   role: UxRole;
   helpfulnessLikert: number; // 1-7
-  susScore?: number; // 0-100
+  susItems?: number[]; // 10 items, each 1-5
+  susScore?: number; // 0-100 (computed)
   comments?: string;
   timestamp?: string;
 }

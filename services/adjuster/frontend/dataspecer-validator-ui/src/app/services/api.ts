@@ -73,6 +73,7 @@ export interface UxSurveyDto {
   dialogId?: string;
   role: UxRole;
   helpfulnessLikert: number; // 1-7
+  susItems?: number[]; // 10 items 1-5
   susScore?: number; // 0-100
   comments?: string;
 }

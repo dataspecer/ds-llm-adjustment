@@ -1,6 +1,31 @@
 version: '3.8'
 
 services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: adjuster-ollama
+    ports:
+      - "11434:11434"
+    environment:
+      OLLAMA_KEEP_ALIVE: 10m
+      OLLAMA_MISTRAL_MODEL: ${OLLAMA_MISTRAL_MODEL:-ministral-3:3b}
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:11434/api/tags || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 15
+    networks:
+      - adjuster-network
+    command: >
+      /bin/sh -lc "
+      ollama serve &
+      until curl -sS http://localhost:11434/api/tags >/dev/null 2>&1; do sleep 1; done;
+      echo pulling ${OLLAMA_MISTRAL_MODEL};
+      ollama pull ${OLLAMA_MISTRAL_MODEL} || true;
+      wait
+      "
   postgres:
     image: postgres:15
     container_name: adjuster-postgres
@@ -82,12 +107,15 @@ services:
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
       CORS_ORIGIN: ${CORS_ORIGIN:-http://ulianov-diploma-dataspecer.westeurope.cloudapp.azure.com}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
     command: ["node", "dist/apps/dialogs-handler/main.js"]
     depends_on:
       postgres:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      ollama:
+        condition: service_started
     ports:
       - "3100:3100"
     networks:
@@ -107,10 +135,13 @@ services:
       CORS_ORIGIN: ${CORS_ORIGIN:-http://ulianov-diploma-dataspecer.westeurope.cloudapp.azure.com}
       DATASPECER_BACKEND_URL: ${DATASPECER_BACKEND_URL:-http://ulianov-diploma-dataspecer.westeurope.cloudapp.azure.com/dataspecer/api}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
     command: ["node", "dist/apps/changes-detector/main.js"]
     depends_on:
       rabbitmq:
         condition: service_healthy
+      ollama:
+        condition: service_started
     ports:
       - "3101:3101"
     networks:
@@ -129,10 +160,13 @@ services:
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
       CORS_ORIGIN: ${CORS_ORIGIN:-http://ulianov-diploma-dataspecer.westeurope.cloudapp.azure.com}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
     command: ["node", "dist/apps/changes-suggester/main.js"]
     depends_on:
       rabbitmq:
         condition: service_healthy
+      ollama:
+        condition: service_started
     ports:
       - "3102:3102"
     networks:
@@ -200,6 +234,7 @@ services:
 volumes:
   postgres_data:
   pgadmin_data:
+  ollama_data:
 
 networks:
   adjuster-network:

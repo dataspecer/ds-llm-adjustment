@@ -10,6 +10,7 @@ export default function UxSurveyPage() {
   const [role, setRole] = useState<UxRole>('Maintainer')
   const [helpfulness, setHelpfulness] = useState<number>(5)
   const [sus, setSus] = useState<number>(70)
+  const [susItems, setSusItems] = useState<number[]>([3,3,3,3,3,3,3,3,3,3]) // 1-5
   const [comments, setComments] = useState<string>('')
   const [ok, setOk] = useState<boolean>(false)
   const [error, setError] = useState<string | null>(null)
@@ -26,6 +27,42 @@ export default function UxSurveyPage() {
     } catch {}
   }, [])
 
+  const susStatements = [
+    'I think that I would like to use this system frequently.',
+    'I found the system unnecessarily complex.',
+    'I thought the system was easy to use.',
+    'I think that I would need the support of a technical person to be able to use this system.',
+    'I found the various functions in this system were well integrated.',
+    'I thought there was too much inconsistency in this system.',
+    'I would imagine that most people would learn to use this system very quickly.',
+    'I found the system very cumbersome to use.',
+    'I felt very confident using the system.',
+    'I needed to learn a lot of things before I could get going with this system.'
+  ]
+
+  function computeSusScore(items: number[]): number {
+    if (!items || items.length !== 10) return NaN
+    // SUS scoring: sum of adjusted scores * 2.5
+    // Odd-indexed (1-based): score = item - 1; Even-indexed: score = 5 - item
+    let sum = 0
+    for (let i = 0; i < 10; i++) {
+      const val = items[i]
+      if (i % 2 === 0) sum += (val - 1)
+      else sum += (5 - val)
+    }
+    return Math.round(sum * 2.5)
+  }
+
+  function setSusItem(idx: number, val: number) {
+    setSusItems(prev => {
+      const next = prev.slice()
+      next[idx] = val
+      const computed = computeSusScore(next)
+      if (Number.isFinite(computed)) setSus(computed)
+      return next
+    })
+  }
+
   const submit = async () => {
     setOk(false)
     setError(null)
@@ -35,6 +72,7 @@ export default function UxSurveyPage() {
       dialogId: dialogId || undefined,
       role,
       helpfulnessLikert: helpfulness,
+      susItems,
       susScore: sus,
       comments: comments || undefined,
     }
@@ -85,8 +123,29 @@ export default function UxSurveyPage() {
                 <input type="number" min={1} max={7} value={helpfulness} onChange={e => setHelpfulness(Number(e.target.value))} className="w-full bg-zinc-700 rounded px-3 py-2 outline-none" />
               </div>
               <div>
-                <label className="block text-sm text-gray-300 mb-1">SUS Score (0-100)</label>
+                <label className="block text-sm text-gray-300 mb-1">SUS Score (auto-computed)</label>
                 <input type="number" min={0} max={100} value={sus} onChange={e => setSus(Number(e.target.value))} className="w-full bg-zinc-700 rounded px-3 py-2 outline-none" />
+              </div>
+            </div>
+            <div className="mt-6">
+              <div className="text-sm text-gray-300 mb-2">System Usability Scale (1-5)</div>
+              <div className="space-y-3">
+                {susStatements.map((label, idx) => (
+                  <div key={idx} className="bg-zinc-700 rounded p-3">
+                    <div className="text-sm text-gray-200 mb-2">{idx + 1}. {label}</div>
+                    <div className="flex gap-2">
+                      {[1,2,3,4,5].map(v => (
+                        <button
+                          key={v}
+                          onClick={() => setSusItem(idx, v)}
+                          className={`px-3 py-1 rounded text-sm ${susItems[idx] === v ? 'bg-blue-600 text-white' : 'bg-zinc-600 text-gray-200 hover:bg-zinc-500'}`}
+                        >
+                          {v}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
             <div className="mt-4">
