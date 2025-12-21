@@ -134,8 +134,7 @@ export class ChangesSuggesterService implements ChangesSuggesterServiceInterface
     const modelName: 'gpt-5' | 'gpt-5-mini' | 'gpt-5-nano' | 'gpt-oss-120b' = pickGpt5Model();
     const model = new ChatOpenAI({
       model: modelName,
-      apiKey: process.env.OPENAI_API_KEY,
-      temperature: 0,
+      apiKey: process.env.OPENAI_API_KEY
     });
 
     const prompt: ChatPromptTemplate = ChatPromptTemplate.fromTemplate(PROMPTS.changesSuggester.psmPreviewTemplate);
