@@ -1,4 +1,4 @@
-import { Injectable, Inject } from '@nestjs/common';
+import { Injectable, Inject, Logger } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
 import { SuggestionInputDto } from '@app/common/dto/suggestion-input.dto';
 import { SuggestionsDto, Suggestion } from '@app/common/dto/suggestions.dto';
@@ -8,12 +8,15 @@ import { PROMPTS } from '@app/common/config/prompts';
 import { z } from 'zod';
 import { ChangesSuggesterServiceInterface } from '@interfaces/changes-suggester.service.interface';
 import { extractKeywordsFromChanges, selectRelevantPsmContext, selectRelevantRdfContext } from '@app/common/utils/psm-context';
+import { firstValueFrom } from 'rxjs';
 
 @Injectable()
 export class ChangesSuggesterService implements ChangesSuggesterServiceInterface {
 
   public constructor(
     @Inject('EVALUATION') private readonly evaluationClient: ClientProxy,
+    @Inject('DATASPECER_ADAPTER') private readonly dataspecerAdapterClient: ClientProxy,
+    @Inject('DIALOG_SERVICE') private readonly dialogServiceClient: ClientProxy,
   ) {}
 
   public async suggest(dto: SuggestionInputDto): Promise<SuggestionsDto> {
@@ -78,6 +81,85 @@ export class ChangesSuggesterService implements ChangesSuggesterServiceInterface
       dialogId: dto.dialogId,
       suggestions,
     };
+  }
+
+  public async previewPsm(id: string): Promise<string> {
+    const logger = new Logger(ChangesSuggesterService.name);
+    // 1) Load shared analysis by ID (includes changes + decisions)
+    let analysis: {
+      analysisId: string;
+      oldSchemaName: string;
+      newSchemaName: string;
+      psmFileName: string;
+      changes: Array<{ id: string; type: string; path: string; description: string; [k: string]: any }>;
+      decisions?: Array<{ changeId: string; decision: string; comment?: string }>;
+      schema: string;
+      timestamp: string;
+    };
+    try {
+      analysis = await firstValueFrom(
+        this.dialogServiceClient.send('analysis.get', { analysisId: id })
+      ) as any;
+    } catch (e) {
+      logger.error(`previewPsm: cannot load analysis ${id}: ${e instanceof Error ? e.message : e}`);
+      throw e instanceof Error ? e : new Error('Failed to load analysis via AMQP');
+    }
+
+    // Build accepted changes payload
+    const acceptedChangeIds = new Set(
+      (analysis.decisions || [])
+        .filter(d => d.decision === 'accept')
+        .map(d => d.changeId)
+    );
+    const acceptedChanges = (analysis.changes || []).filter(c => acceptedChangeIds.has((c as any).id));
+
+    // 2) Fetch PSM from Dataspecer
+    const dataspecerBaseUrl: string =
+      process.env.DATASPECER_BACKEND_URL ||
+      process.env.DATASPECER_API_URL ||
+      'http://dataspecer:80';
+    const psmIri: string = analysis.psmFileName;
+    let originalPsm: string;
+    try {
+      originalPsm = await firstValueFrom(
+        this.dataspecerAdapterClient.send('get.psm', { dataspecerBaseUrl, iri: psmIri })
+      ) as string;
+    } catch (e) {
+      logger.error(`previewPsm: cannot fetch PSM for iri=${psmIri}: ${e instanceof Error ? e.message : e}`);
+      throw new Error('Failed to fetch PSM from Dataspecer');
+    }
+
+    // 3) Call LLM to produce modified PSM JSON
+    const { pickGpt5Model } = await import('@app/common/evaluation/model');
+    const modelName: 'gpt-5' | 'gpt-5-mini' | 'gpt-5-nano' | 'gpt-oss-120b' = pickGpt5Model();
+    const model = new ChatOpenAI({
+      model: modelName,
+      apiKey: process.env.OPENAI_API_KEY,
+      temperature: 0,
+    });
+
+    const prompt: ChatPromptTemplate = ChatPromptTemplate.fromTemplate(PROMPTS.changesSuggester.psmPreviewTemplate);
+
+    const chain: any = prompt.pipe(model);
+    const llmResponse = await chain.invoke({
+      acceptedChanges: JSON.stringify(acceptedChanges),
+      psm: originalPsm,
+    });
+
+    const text: string = typeof llmResponse?.content === 'string'
+      ? llmResponse.content
+      : Array.isArray(llmResponse?.content)
+        ? (llmResponse.content.find((c: any) => typeof c?.text === 'string')?.text || '')
+        : '';
+
+    // 4) Ensure it is JSON (pretty-print if possible)
+    try {
+      const parsed = JSON.parse(text);
+      return JSON.stringify(parsed, null, 2);
+    } catch {
+      // Return raw if not strictly JSON, caller can handle
+      return text;
+    }
   }
 
 }

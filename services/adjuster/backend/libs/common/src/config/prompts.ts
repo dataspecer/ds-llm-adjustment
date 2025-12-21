@@ -7,6 +7,7 @@ export interface ChangesDetectorPromptsConfig {
 
 export interface ChangesSuggesterPromptsConfig {
   suggestionsTemplate: string;
+  psmPreviewTemplate: string;
 }
 
 export interface SpecificationProcessorPromptsConfig {
@@ -31,6 +32,8 @@ const defaultPrompts: PromptsConfig = {
   changesSuggester: {
     suggestionsTemplate:
       "You are provided with a list of changes detected in an API specification, a PSM context (selected relevant chunks), and (optionally) an ontology context in RDF/OWL.\nChanges (JSON): {changes}\nPSM context: {psm}\nOntology context (RDF/OWL): {ontology}\n\nFor each change, provide:\n- A suggestion for how to handle the change\n- A rationale explaining why this suggestion is appropriate\n\nConstraints:\n- Keep responses concise and actionable\n- Assume the PSM or ontology text may be truncated; do not rely on missing context\n\nConsider:\n1. Impact on existing systems\n2. Backward compatibility\n3. Best practices for API design\n4. RDFS/OWL semantics (e.g., rdfs:domain, rdfs:range, rdfs:subClassOf, owl:cardinality, FunctionalProperty); ensure suggestions respect these when relevant",
+    psmPreviewTemplate:
+      "You are a PSM (Platform Specific Model) maintainer. You are given a PSM JSON artifact and a list of accepted changes.\nApply the accepted changes to produce a new PSM JSON.\n\nRequirements:\n- Return ONLY the updated PSM as valid JSON. No prose.\n- Preserve structure and metadata not impacted by the changes.\n- Ensure consistency and referential integrity.\n\nAccepted changes (JSON): {acceptedChanges}\nOriginal PSM (JSON): {psm}",
   },
   specificationProcessor: {
     describeChangesTemplate:

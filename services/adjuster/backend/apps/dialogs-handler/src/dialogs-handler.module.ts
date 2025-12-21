@@ -21,6 +21,7 @@ import { EvaluationService } from './services/evaluation/evaluation.service';
 import { EvaluationController } from './controllers/http/evaluation/evaluation.controller';
 import { EvaluationAmqpController } from './controllers/amqp/evaluation/evaluation.amqp.controller';
 import { EvaluationModelEntity } from './entities/evaluation-model.entity';
+import { SpecificationMaintainerAmqpController } from './controllers/amqp/specification-maintainer/specification-maintainer.amqp.controller';
 
 @Module({
   imports: [
@@ -84,7 +85,7 @@ import { EvaluationModelEntity } from './entities/evaluation-model.entity';
     }),
     TypeOrmModule.forFeature([ChatMessageEntity, EvaluationDiffEntity, EvaluationValidatorEntity, EvaluationApplyEntity, EvaluationUxEntity, EvaluationMcpEntity, EvaluationModelEntity])
   ],
-  controllers: [DialogAmqpController, SpecificationDialogController, SpecificationMaintainerController, EvaluationController, EvaluationAmqpController],
+  controllers: [DialogAmqpController, SpecificationDialogController, SpecificationMaintainerController, SpecificationMaintainerAmqpController, EvaluationController, EvaluationAmqpController],
   providers: [
     {
       provide: IDialogService,

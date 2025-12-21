@@ -947,6 +947,26 @@ class Api {
   }
 
   /**
+   * Preview updated PSM JSON for an analysis (applies accepted changes via LLM)
+   */
+  async previewPsm(analysisId: string): Promise<ApiResponse<{ content: string }>> {
+    try {
+      const response = await fetch(`${this.changesSuggesterUrl}/api/suggestions/psm-preview/${encodeURIComponent(analysisId)}`, {
+        method: 'GET',
+      });
+      if (!response.ok) {
+        throw new Error('Failed to preview PSM');
+      }
+      const text = await response.text();
+      return { data: { content: text } };
+    } catch (error) {
+      return {
+        error: error instanceof Error ? error.message : 'An error occurred',
+      };
+    }
+  }
+
+  /**
    * Generate a developer-facing prompt and validation link for re-upload after maintainer review
    */
   async generateDeveloperReuploadPrompt(
