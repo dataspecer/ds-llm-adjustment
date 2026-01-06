@@ -11,6 +11,7 @@ export interface SchemaChangeDto {
   isProblematic: boolean;
   suggestion?: string;
   rationale?: string;
+  satisfaction?: number; // 1-10
 }
 
 

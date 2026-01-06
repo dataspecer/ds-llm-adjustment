@@ -15,6 +15,8 @@ export class ChangesDetectorService implements ChangesDetectorServiceInterface {
   constructor(
     @Inject('DATASPECER_ADAPTER')
     private readonly dataspecerAdapterClient: ClientProxy,
+    @Inject('EVALUATION')
+    private readonly evaluationClient: ClientProxy,
   ) {}
 
   public async detectFromIri(dto: DetectChangesFromIriDto): Promise<DetectedChangesDto> {
@@ -87,6 +89,7 @@ export class ChangesDetectorService implements ChangesDetectorServiceInterface {
     if (!dto.psm && dto.psmIri) {
       try {
         const dataspecerBaseUrl: string = this.getDataspecerBaseUrl();
+        console.log('dataspecerBaseUrl', dataspecerBaseUrl);
         const psm: string = await firstValueFrom(
           this.dataspecerAdapterClient.send('get.psm', {
             dataspecerBaseUrl,
@@ -153,12 +156,23 @@ export class ChangesDetectorService implements ChangesDetectorServiceInterface {
       console.log('Fallback diff length:', diffString.length);
     }
 
+    const { pickGpt5Model } = await import('@app/common/evaluation/model');
+    const modelName: 'gpt-5' | 'gpt-5-mini' | 'gpt-5-nano' | 'gpt-oss-120b' = pickGpt5Model();
     const model = new ChatOpenAI({
-      model: "gpt-4.1",
-      temperature: 0.1,
+      model: modelName,
       maxTokens: 4000,
       apiKey: process.env.OPENAI_API_KEY,
     });
+    // emit model selection event
+    if (dto.runId) {
+      this.evaluationClient.emit('evaluation.model', {
+        runId: dto.runId,
+        service: 'changes-detector',
+        operation: 'detect',
+        modelName,
+        timestamp: new Date().toISOString(),
+      }).subscribe({ error: () => {} });
+    }
 
     const MAX_DIFF_LENGTH = 6000;
     const MAX_PSM_CONTEXT_CHARS = 2500;
@@ -219,6 +233,7 @@ export class ChangesDetectorService implements ChangesDetectorServiceInterface {
 
       return {
         dialogId: dto.dialogId,
+        runId: dto.runId,
         changes,
       };
     } catch (error) {
@@ -227,6 +242,7 @@ export class ChangesDetectorService implements ChangesDetectorServiceInterface {
       // Fallback: return empty changes with error info
       return {
         dialogId: dto.dialogId,
+        runId: dto.runId,
         changes: [{
           changeId: 'error-1',
           type: [ChangeType.ADDITION],

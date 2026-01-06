@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { api, SchemaChangeDto, ChangeType } from '../services/api'
+import { api, SchemaChangeDto, ChangeType, DiffQualityResultDto } from '../services/api'
 import { ChangeDecision } from '../types/specification-maintainer'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
@@ -60,6 +60,15 @@ function SpecificationMaintainerContent() {
   const [regenerationErrors, setRegenerationErrors] = useState<Map<string, string>>(new Map())
   const [isAutoSaving, setIsAutoSaving] = useState(false)
   const [lastSaved, setLastSaved] = useState<Date | null>(null)
+  const [runId, setRunId] = useState<string>('')
+  const [labels, setLabels] = useState<Record<string, 'tp' | 'fp' | 'none'>>({})
+  const [fnAddition, setFnAddition] = useState<number>(0)
+  const [fnRemoval, setFnRemoval] = useState<number>(0)
+  const [fnRename, setFnRename] = useState<number>(0)
+  const [fnTypeChange, setFnTypeChange] = useState<number>(0)
+  const [evalSaving, setEvalSaving] = useState<boolean>(false)
+  const [evalResult, setEvalResult] = useState<DiffQualityResultDto | null>(null)
+  const [evalError, setEvalError] = useState<string | null>(null)
 
   const psmIri = searchParams.get('data-psm-schema')
   const dataSpecificationIri = searchParams.get('data-specification')
@@ -77,6 +86,12 @@ function SpecificationMaintainerContent() {
     const autoLoaded = !!oldSchema.name && oldSchema.name.includes('(Auto-loaded via DSV)')
     setUseAutomatic(isIriMode && autoLoaded)
   }, [isIriMode, oldSchema.name])
+
+  useEffect(() => {
+    // restore existing runId if present
+    const rid = sessionStorage.getItem('adjusterRunId')
+    if (rid) setRunId(rid)
+  }, [])
 
   useEffect(() => {
     if (psmIri && !psmFile.content) {
@@ -355,6 +370,12 @@ function SpecificationMaintainerContent() {
 
       setChanges(transformedChanges)
       setAnalysisId(newAnalysisId)
+      // initialize labels to none and set runId equal to analysis id (persist even if not shared)
+      const initialLabels: Record<string, 'tp' | 'fp' | 'none'> = {}
+      for (const c of transformedChanges) initialLabels[c.id] = 'none'
+      setLabels(initialLabels)
+      sessionStorage.setItem('adjusterRunId', newAnalysisId)
+      setRunId(newAnalysisId)
       
       setIsAutoSaving(true)
       try {
@@ -903,6 +924,53 @@ function SpecificationMaintainerContent() {
 
   const psmFromDataspecer = searchParams.get('data-psm-schema')
 
+  function primaryTypeOf(change: SchemaChangeDto): 'addition' | 'removal' | 'rename' | 'type-change' {
+    return change.type
+  }
+
+  function markSelected(as: 'tp' | 'fp') {
+    if (!selectedChangeId) return
+    setLabels(prev => ({ ...prev, [selectedChangeId]: as }))
+  }
+
+  async function computeAndStoreEvaluation() {
+    setEvalError(null)
+    setEvalResult(null)
+    setEvalSaving(true)
+    try {
+      const predicted = changes.map(c => ({
+        id: c.id,
+        type: primaryTypeOf(c),
+        path: c.path || '',
+      }))
+      const gold: Array<{ id: string; type: 'addition' | 'removal' | 'rename' | 'type-change'; path: string }> = []
+      for (const c of changes) {
+        if (labels[c.id] === 'tp') {
+          gold.push({ id: c.id, type: primaryTypeOf(c), path: c.path || '' })
+        }
+      }
+      const pushFn = (type: 'addition' | 'removal' | 'rename' | 'type-change', count: number) => {
+        for (let i = 0; i < Math.max(0, count | 0); i++) {
+          gold.push({ id: `fn-${type}-${i + 1}`, type, path: `$.fn.${type}.${i + 1}` })
+        }
+      }
+      pushFn('addition', fnAddition)
+      pushFn('removal', fnRemoval)
+      pushFn('rename', fnRename)
+      pushFn('type-change', fnTypeChange)
+      const resp = await api.submitEvaluationDiff({ runId: runId || `${Date.now()}`, gold, predicted } as any)
+      if (resp.error) {
+        setEvalError(resp.error)
+      } else {
+        setEvalResult(resp.data as DiffQualityResultDto)
+      }
+    } catch (e: any) {
+      setEvalError(e?.message || 'Failed to compute evaluation')
+    } finally {
+      setEvalSaving(false)
+    }
+  }
+
   if (changes.length === 0) {
     return (
       <div className="min-h-screen bg-zinc-900">
@@ -1029,6 +1097,13 @@ function SpecificationMaintainerContent() {
           <span className="text-lg text-gray-300">Adjuster</span>
         </div>
         <div className="flex space-x-2">
+          <button
+            onClick={() => router.push(`/evaluation/ux${runId ? `?runId=${encodeURIComponent(runId)}` : ''}`)}
+            className="px-4 py-2 text-white rounded transition-colors"
+            style={{ background: '#16A34A' }}
+          >
+            UX Survey
+          </button>
           {shareUrl && (
             <div className="flex items-center space-x-2 mr-4">
               <div className="text-sm text-green-200">
@@ -1115,6 +1190,39 @@ function SpecificationMaintainerContent() {
             </SyntaxHighlighter>
           </div>
           <div className="p-6 pt-4 flex-shrink-0">
+            <div className="mb-4 bg-zinc-800 border border-zinc-700 rounded p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-sm text-gray-300">Run ID</div>
+                <div className="text-xs text-gray-500">{runId || '—'}</div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">FN (addition)</label>
+                  <input type="number" min={0} value={fnAddition} onChange={e => setFnAddition(Number(e.target.value))} className="w-full bg-zinc-700 rounded px-2 py-1 text-sm outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">FN (removal)</label>
+                  <input type="number" min={0} value={fnRemoval} onChange={e => setFnRemoval(Number(e.target.value))} className="w-full bg-zinc-700 rounded px-2 py-1 text-sm outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">FN (rename)</label>
+                  <input type="number" min={0} value={fnRename} onChange={e => setFnRename(Number(e.target.value))} className="w-full bg-zinc-700 rounded px-2 py-1 text-sm outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">FN (type-change)</label>
+                  <input type="number" min={0} value={fnTypeChange} onChange={e => setFnTypeChange(Number(e.target.value))} className="w-full bg-zinc-700 rounded px-2 py-1 text-sm outline-none" />
+                </div>
+              </div>
+              <div className="mt-3 flex items-center gap-3">
+                <button onClick={computeAndStoreEvaluation} disabled={evalSaving || changes.length === 0} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50">{evalSaving ? 'Saving...' : 'Compute & Store'}</button>
+                {evalError && <span className="text-red-400 text-sm">{evalError}</span>}
+                {evalResult && (
+                  <span className="text-green-400 text-sm">
+                    Saved. Micro F1: {evalResult.microAveraged.f1.toFixed(3)}
+                  </span>
+                )}
+              </div>
+            </div>
             <div className="text-sm text-gray-400">
               <span>Legend: </span>
               <span className="px-2 py-1 rounded" style={{ backgroundColor: 'rgba(5, 150, 105, 0.4)', color: '#FFFFFF' }}>Addition</span>{' '}
@@ -1254,6 +1362,25 @@ function SpecificationMaintainerContent() {
                           className="w-full px-3 py-2 bg-zinc-700 border border-zinc-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                       </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">Satisfaction (1-10)</label>
+                        <div className="flex flex-wrap gap-2">
+                          {[1,2,3,4,5,6,7,8,9,10].map(v => (
+                            <button
+                              key={v}
+                              onClick={() => updateEditingChange('satisfaction', v)}
+                              className={`px-3 py-1 rounded text-sm ${
+                                editingChange.satisfaction === v
+                                  ? 'bg-purple-600 text-white'
+                                  : 'bg-zinc-700 text-gray-200 hover:bg-zinc-600'
+                              }`}
+                            >
+                              {v}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   ) : (
                     <div>
@@ -1269,6 +1396,7 @@ function SpecificationMaintainerContent() {
                           <span className="text-red-200">No ⚠</span>
                         )}
                       </div>
+                      <div className="mb-2 text-gray-200">Satisfaction: {selectedChange.satisfaction ?? '—'}</div>
                       {selectedChange.groupId && (
                         <div className="mb-2 text-gray-200">Group ID: {selectedChange.groupId}</div>
                       )}
@@ -1284,6 +1412,13 @@ function SpecificationMaintainerContent() {
                           <div className="text-sm text-gray-400">{selectedChange.rationale}</div>
                         </div>
                       )}
+                      <div className="mt-3">
+                        <div className="text-sm text-gray-300 mb-1">Mark this detection</div>
+                        <div className="flex gap-2">
+                          <button onClick={() => markSelected('tp')} className={`px-3 py-1 rounded ${labels[selectedChange.id] === 'tp' ? 'bg-green-600 text-white' : 'bg-zinc-700 text-gray-200 hover:bg-zinc-600'}`}>TP</button>
+                          <button onClick={() => markSelected('fp')} className={`px-3 py-1 rounded ${labels[selectedChange.id] === 'fp' ? 'bg-red-600 text-white' : 'bg-zinc-700 text-gray-200 hover:bg-zinc-600'}`}>FP</button>
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>

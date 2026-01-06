@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject } from '@nestjs/common';
+import { ClientProxy } from '@nestjs/microservices';
 import { ChatOpenAI } from '@langchain/openai';
 import { HumanMessage, SystemMessage, AIMessage } from '@langchain/core/messages';
 import { SchemaChangeDto } from '../../dto/schema-change.dto';
@@ -13,10 +14,11 @@ export class LlmChatService {
   private readonly llm: ChatOpenAI;
   private readonly conversations = new Map<string, ChatConversation>();
 
-  constructor() {
+  constructor(@Inject('EVALUATION') private readonly evaluationClient: ClientProxy) {
+    const pick = require('@app/common/evaluation/model') as any;
+    const modelName = (pick.pickGpt5Model && pick.pickGpt5Model()) || 'gpt-5-mini';
     this.llm = new ChatOpenAI({
-      modelName: 'gpt-4o-mini', // Cost-effective model for chat
-      temperature: 0.7,
+      modelName,
       openAIApiKey: process.env.OPENAI_API_KEY,
     });
   }
@@ -26,6 +28,18 @@ export class LlmChatService {
    */
   async startChat(startChatDto: StartChatDto): Promise<ChatConversation> {
     const conversationId: string = this.generateId();
+    const runId: string = startChatDto.runId || conversationId;
+    try {
+      const pick = require('@app/common/evaluation/model') as any;
+      const modelName = (this.llm as any)?.modelName || (pick.pickGpt5Model && pick.pickGpt5Model()) || 'gpt-5-mini';
+      this.evaluationClient.emit('evaluation.model', {
+        runId,
+        service: 'dialogs-handler',
+        operation: 'llm-chat.start',
+        modelName,
+        timestamp: new Date().toISOString(),
+      }).subscribe({ error: () => {} });
+    } catch {}
     
     const systemPrompt: string = this.buildSystemPrompt(startChatDto.changes);
     const initialUserPrompt: string = startChatDto.initialPrompt || this.buildInitialPrompt(startChatDto.changes);

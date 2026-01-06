@@ -1,21 +1,23 @@
 # syntax=docker/dockerfile:1
 
 # ===== Base/build stage =====
-FROM node:20-alpine AS build
+FROM node:20-bookworm-slim AS build
 WORKDIR /app
 
 ARG APP_NAME=dialogs-handler
 ENV APP_NAME=${APP_NAME}
 
-RUN apk add --no-cache python3 make g++ openssl libc6-compat bash
+RUN apt-get update && apt-get install -y --no-install-recommends \
+  python3 make g++ openssl ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
 
 COPY package*.json ./
 COPY nest-cli.json ./
 COPY tsconfig*.json ./
 
-RUN npm ci --omit=dev && cp -r node_modules /tmp/prod_node_modules
+RUN npm i --omit=dev && cp -r node_modules /tmp/prod_node_modules
 
-RUN npm ci
+RUN npm i
 
 COPY . .
 
@@ -31,7 +33,7 @@ RUN mkdir -p dist/libs/common/src/config \
   && cp libs/common/src/config/prompts.json dist/libs/common/src/config/prompts.json
 
 # ===== Runtime stage =====
-FROM node:20-alpine AS runtime
+FROM node:20-bookworm-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 
@@ -39,7 +41,9 @@ ENV NODE_ENV=production
 ARG APP_NAME=dialogs-handler
 ENV APP_NAME=${APP_NAME}
 
-RUN apk add --no-cache openssl libc6-compat
+RUN apt-get update && apt-get install -y --no-install-recommends \
+  ca-certificates libssl3 \
+  && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /tmp/prod_node_modules ./node_modules
 COPY --from=build /app/package*.json ./

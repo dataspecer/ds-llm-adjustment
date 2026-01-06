@@ -47,6 +47,15 @@
         "tsConfigPath": "apps/changes-suggester/tsconfig.app.json"
       }
     },
+    "artifacts-embedder": {
+      "type": "application",
+      "root": "apps/artifacts-embedder",
+      "entryFile": "main",
+      "sourceRoot": "apps/artifacts-embedder/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/artifacts-embedder/tsconfig.app.json"
+      }
+    },
     "dataspecer-adapter": {
       "type": "application",
       "root": "apps/dataspecer-adapter",

@@ -10,7 +10,25 @@ import { ChangesSuggesterAmqpController } from './controllers/changes-suggester.
     ConfigModule.forRoot({ isGlobal: true }),
     ClientsModule.register([
       {
+        name: 'DATASPECER_ADAPTER',
+        transport: Transport.RMQ,
+        options: {
+          urls: [process.env.RABBITMQ_URL as string],
+          queue: 'dataspecer_adapter_queue',
+          queueOptions: { durable: true },
+        },
+      },
+      {
         name: 'DIALOG_SERVICE',
+        transport: Transport.RMQ,
+        options: {
+          urls: [process.env.RABBITMQ_URL as string],
+          queue: 'dialogs_handler_queue',
+          queueOptions: { durable: true },
+        },
+      },
+      {
+        name: 'EVALUATION',
         transport: Transport.RMQ,
         options: {
           urls: [process.env.RABBITMQ_URL as string],

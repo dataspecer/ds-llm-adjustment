@@ -302,7 +302,7 @@ export class SpecificationMaintainerService {
 
     await this.sharedAnalysesRepo.save(entity);
 
-    const shareUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/shared/${storeDto.analysisId}`;
+    const shareUrl = `${process.env.FRONTEND_URL || 'http://ulianov-diploma-dataspecer.westeurope.cloudapp.azure.com'}/shared/${storeDto.analysisId}`;
 
     return { success: true, shareUrl };
   }

@@ -10,6 +10,9 @@ services:
       - "3002:80"
     environment:
       - BASE_URL=http://localhost
+      - MCP_ENABLED=1
+      - MCP_BASE_PATH=/api/mcp
+      - MCP_AUTH_SECRET=1234567890
     volumes:
       - ../../database:/usr/src/app/database
     networks:
@@ -95,6 +98,9 @@ services:
     environment:
       - NODE_ENV=development
       - PORT=3100
+      - MCP_ENABLED=1
+      - MCP_BASE_PATH=/api/mcp
+      - MCP_AUTH_SECRET=1234567890
       - DATABASE_URL=postgresql://adjuster:adjuster123@postgres:5432/adjuster
       - RABBITMQ_URL=amqp://rabbitmq:5672
       - RABBITMQ_USER=guest
@@ -122,6 +128,8 @@ services:
     environment:
       - NODE_ENV=development
       - PORT=3000
+      - DATASPECER_MCP_BASE_URL=http://dataspecer/api/mcp
+      - DATASPECER_MCP_TOKEN=1234567890
       - RABBITMQ_URL=amqp://rabbitmq:5672
       - RABBITMQ_USER=guest
       - RABBITMQ_PASSWORD=guest
@@ -137,6 +145,37 @@ services:
     networks:
       - adjuster-network
     command: npm run start:dev dataspecer-adapter
+
+  artifacts-embedder:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "3103:3103"
+    environment:
+      - NODE_ENV=development
+      - PORT=3103
+      - RABBITMQ_URL=amqp://rabbitmq:5672
+      - RABBITMQ_USER=guest
+      - RABBITMQ_PASSWORD=guest
+      - CORS_ORIGIN=http://localhost:3001
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - QDRANT_URL=http://qdrant:6333
+      - QDRANT_COLLECTION=artifacts
+      - QDRANT_VECTOR_SIZE=1536
+      - DATASPECER_BACKEND_URL=http://dataspecer:80
+    env_file:
+      - .env
+    depends_on:
+      - rabbitmq
+      - qdrant
+      - dataspecer
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    networks:
+      - adjuster-network
+    command: npm run start:dev artifacts-embedder
 
   postgres:
     image: postgres:15
@@ -156,6 +195,21 @@ services:
       retries: 3
     networks:
       - adjuster-network
+ 
+  pgadmin:
+     image: dpage/pgadmin4:latest
+     container_name: adjuster-pgadmin
+     environment:
+       - PGADMIN_DEFAULT_EMAIL=admin@local.dev
+       - PGADMIN_DEFAULT_PASSWORD=admin
+     ports:
+       - "5050:80"
+     depends_on:
+       - postgres
+     volumes:
+       - pgadmin_data:/var/lib/pgadmin
+     networks:
+       - adjuster-network
 
   rabbitmq:
     image: rabbitmq:3-management-alpine
@@ -170,10 +224,23 @@ services:
     networks:
       - adjuster-network
 
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    networks:
+      - adjuster-network
+
 volumes:
   rabbitmq_data:
     driver: local
   postgres_data:
+    driver: local
+  qdrant_storage:
+    driver: local
+  pgadmin_data:
     driver: local
 
 networks:

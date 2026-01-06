@@ -13,6 +13,16 @@ import { SpecificationProcessorService } from './services/specification-processo
 import { SpecificationMaintainerController } from './controllers/http/specification-maintainer/specification-maintainer.controller';
 import { SpecificationMaintainerService } from './services/specification-maintainer/specification-maintainer.service';
 import { LlmChatService } from './services/specification-maintainer/llm-chat.service';
+import { EvaluationDiffEntity } from './entities/evaluation-diff.entity';
+import { EvaluationValidatorEntity } from './entities/evaluation-validator.entity';
+import { EvaluationApplyEntity } from './entities/evaluation-apply.entity';
+import { EvaluationUxEntity } from './entities/evaluation-ux.entity';
+import { EvaluationMcpEntity } from './entities/evaluation-mcp.entity';
+import { EvaluationService } from './services/evaluation/evaluation.service';
+import { EvaluationController } from './controllers/http/evaluation/evaluation.controller';
+import { EvaluationAmqpController } from './controllers/amqp/evaluation/evaluation.amqp.controller';
+import { EvaluationModelEntity } from './entities/evaluation-model.entity';
+import { SpecificationMaintainerAmqpController } from './controllers/amqp/specification-maintainer/specification-maintainer.amqp.controller';
 
 @Module({
   imports: [
@@ -45,6 +55,15 @@ import { LlmChatService } from './services/specification-maintainer/llm-chat.ser
           queueOptions: { durable: true },
         },
       },
+      {
+        name: 'EVALUATION',
+        transport: Transport.RMQ,
+        options: {
+          urls: [process.env.RABBITMQ_URL || 'amqp://guest:guest@rabbitmq:5672'],
+          queue: 'dialogs_handler_queue',
+          queueOptions: { durable: true },
+        },
+      },
     ]),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
@@ -53,7 +72,7 @@ import { LlmChatService } from './services/specification-maintainer/llm-chat.ser
         return {
           type: 'postgres',
           url: databaseUrl,
-          entities: [ChatMessageEntity, SharedAnalysisEntity],
+          entities: [ChatMessageEntity, EvaluationDiffEntity, EvaluationValidatorEntity, EvaluationApplyEntity, EvaluationUxEntity, EvaluationMcpEntity, EvaluationModelEntity],
           synchronize: true,
           logging: configService.get('NODE_ENV') === 'development',
           ssl: false,
@@ -65,9 +84,9 @@ import { LlmChatService } from './services/specification-maintainer/llm-chat.ser
       },
       inject: [ConfigService],
     }),
-    TypeOrmModule.forFeature([ChatMessageEntity, SharedAnalysisEntity])
+    TypeOrmModule.forFeature([ChatMessageEntity, EvaluationDiffEntity, EvaluationValidatorEntity, EvaluationApplyEntity, EvaluationUxEntity, EvaluationMcpEntity, EvaluationModelEntity])
   ],
-  controllers: [DialogAmqpController, SpecificationDialogController, SpecificationMaintainerController],
+  controllers: [DialogAmqpController, SpecificationDialogController, SpecificationMaintainerController, SpecificationMaintainerAmqpController, EvaluationController, EvaluationAmqpController],
   providers: [
     {
       provide: IDialogService,
@@ -75,7 +94,8 @@ import { LlmChatService } from './services/specification-maintainer/llm-chat.ser
     },
     SpecificationProcessorService,
     SpecificationMaintainerService,
-    LlmChatService
+    LlmChatService,
+    EvaluationService
   ],
 })
 export class DialogsHandlerModule {}

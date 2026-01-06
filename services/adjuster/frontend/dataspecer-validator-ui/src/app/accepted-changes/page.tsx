@@ -12,6 +12,7 @@ export default function AcceptedChangesPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedChange, setSelectedChange] = useState<AcceptedChangeDto | null>(null)
+  const [psmPreviews, setPsmPreviews] = useState<Record<string, { loading: boolean; error: string | null; content: string | null; expanded: boolean }>>({})
 
   // #endregion
 
@@ -39,6 +40,30 @@ export default function AcceptedChangesPage() {
       setError(error instanceof Error ? error.message : 'Failed to load accepted changes')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const togglePreviewPsm = async (analysisId: string) => {
+    setPsmPreviews(prev => {
+      const curr = prev[analysisId];
+      // Toggle expanded; if not existing, set loading and expanded
+      if (!curr) {
+        return { ...prev, [analysisId]: { loading: true, error: null, content: null, expanded: true } };
+      }
+      return { ...prev, [analysisId]: { ...curr, expanded: !curr.expanded } };
+    });
+    // If content is already loaded, and we just toggled, don't refetch
+    const state = psmPreviews[analysisId];
+    if (state && state.content) return;
+    try {
+      const resp = await api.previewPsm(analysisId);
+      if (resp.error) {
+        throw new Error(resp.error);
+      }
+      const content = resp.data?.content ?? '';
+      setPsmPreviews(prev => ({ ...prev, [analysisId]: { loading: false, error: null, content, expanded: true } }));
+    } catch (e) {
+      setPsmPreviews(prev => ({ ...prev, [analysisId]: { loading: false, error: e instanceof Error ? e.message : 'Failed to preview PSM', content: null, expanded: true } }));
     }
   }
 
@@ -151,7 +176,19 @@ export default function AcceptedChangesPage() {
         </div>
         
         <div className="flex items-center space-x-2">
-          <span className="text-sm text-gray-400">Accepted Changes</span>
+          <button
+            onClick={() => router.push('/evaluation/diff')}
+            className="px-3 py-1 rounded text-sm transition-colors text-gray-200 bg-blue-600 hover:bg-blue-700"
+          >
+            Evaluate Diff
+          </button>
+          <button
+            onClick={() => router.push('/evaluation/ux')}
+            className="px-3 py-1 rounded text-sm transition-colors text-gray-200 bg-green-600 hover:bg-green-700"
+          >
+            UX Survey
+          </button>
+          <span className="text-sm text-gray-400 ml-2">Accepted Changes</span>
         </div>
       </nav>
 
@@ -196,11 +233,36 @@ export default function AcceptedChangesPage() {
                         <span>⏰ {formatTimestamp(group.timestamp)}</span>
                       </div>
                     </div>
-                    <span className="px-3 py-1 bg-green-600 text-white text-sm rounded-full">
-                      {group.changes.length} accepted
-                    </span>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => togglePreviewPsm(group.analysisId)}
+                        className="px-3 py-1 rounded text-sm transition-colors text-gray-200 bg-indigo-600 hover:bg-indigo-700"
+                      >
+                        {psmPreviews[group.analysisId]?.expanded ? 'Hide PSM Preview' : 'Preview PSM'}
+                      </button>
+                      <span className="px-3 py-1 bg-green-600 text-white text-sm rounded-full">
+                        {group.changes.length} accepted
+                      </span>
+                    </div>
                   </div>
                 </div>
+
+                {/* PSM Preview */}
+                {psmPreviews[group.analysisId]?.expanded && (
+                  <div className="px-6 py-4 border-b border-zinc-700 bg-zinc-900/40">
+                    {psmPreviews[group.analysisId]?.loading ? (
+                      <div className="text-gray-400 text-sm">Generating preview...</div>
+                    ) : psmPreviews[group.analysisId]?.error ? (
+                      <div className="text-red-400 text-sm">Error: {psmPreviews[group.analysisId]?.error}</div>
+                    ) : (
+                      <div className="overflow-auto max-h-96">
+                        <pre className="text-xs leading-relaxed whitespace-pre text-gray-100 bg-zinc-900 p-4 rounded border border-zinc-700">
+{psmPreviews[group.analysisId]?.content}
+                        </pre>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Changes List */}
                 <div className="divide-y divide-zinc-700">

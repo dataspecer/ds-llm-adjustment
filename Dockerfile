@@ -1,4 +1,4 @@
-FROM oven/bun:1.2.4-debian AS base
+FROM oven/bun:1.2.19 AS base
 
 # Builds in /usr/src/app and copies to /usr/src/final to avoid copying build dependencies
 FROM base AS builder
@@ -10,7 +10,7 @@ COPY services/ services/
 COPY packages/ packages/
 COPY .npmrc package-lock.json package.json turbo.json ./docker/ws/docker-configure.sh ./docker/ws/docker-copy.sh ./
 
-RUN sed -i "/packageManager/ c \"packageManager\": \"bun@1.2.4\"," package.json
+RUN sed -i "/packageManager/ c \"packageManager\": \"bun@1.2.19\"," package.json
 RUN bun install
 
 ARG GIT_COMMIT
@@ -58,9 +58,14 @@ WORKDIR /usr/src/app
 
 COPY --from=builder /usr/src/final /usr/src/app
 
+# Ensure OpenSSL 3 is available for Prisma engines during migrations
+RUN apt-get update && apt-get install -y --no-install-recommends \
+  ca-certificates libssl3 procps \
+  && rm -rf /var/lib/apt/lists/*
+
 # Do prisma migrations (needs to be done in correct absolute directory)
 RUN mkdir -p /usr/src/app/database
-RUN bunx prisma migrate deploy --schema dist/schema.prisma
+RUN bunx prisma@6.13.0 migrate deploy --schema dist/schema.prisma
 
 
 
@@ -68,10 +73,22 @@ RUN bunx prisma migrate deploy --schema dist/schema.prisma
 FROM base AS final
 WORKDIR /usr/src/app
 
-# Makes directory accessible for the user
-# Instals prisma for migrations and cleans install cache
-RUN chmod a+rwx /usr/src/app && \
-  bun install --no-cache prisma && \
+# Redeclare build args and expose them as runtime env so entrypoint can print metadata (prefixed to avoid collisions)
+ARG GIT_COMMIT
+ARG GIT_REF
+ARG GIT_COMMIT_DATE
+ARG GIT_COMMIT_NUMBER
+ENV DATASPECER_GIT_COMMIT=${GIT_COMMIT} \
+  DATASPECER_GIT_REF=${GIT_REF} \
+  DATASPECER_GIT_COMMIT_DATE=${GIT_COMMIT_DATE} \
+  DATASPECER_GIT_COMMIT_NUMBER=${GIT_COMMIT_NUMBER}
+
+# Ensure OpenSSL 3 is available for Prisma at runtime, make dir accessible, install prisma for migrations, and clean cache
+RUN apt-get update && apt-get install -y --no-install-recommends \
+  ca-certificates libssl3 procps \
+  && rm -rf /var/lib/apt/lists/* && \
+  chmod a+rwx /usr/src/app && \
+  bun install --no-cache prisma@6.13.0 && \
   rm -rf ~/.bun ~/.cache
 
 # Copy final files

@@ -1,94 +1,136 @@
-import axios, { AxiosResponse } from 'axios';
-import * as AdmZip from 'adm-zip';
 import { DataspecerAdapterServiceInterface } from '@interfaces/dataspecer.adapter.service.interface';
+import { McpHttpClient } from '@app/common/mcp/client';
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import { ClientProxy } from '@nestjs/microservices';
+import { ValidatorCheckEventDto } from '@app/common/dto/evaluation/validator-check.dto';
+import { ApplyMetricEventDto } from '@app/common/dto/evaluation/apply-metric.dto';
+import { McpSafetyEventDto } from '@app/common/dto/evaluation/mcp-safety.dto';
 
+@Injectable()
 export class DataspecerAdapterService implements DataspecerAdapterServiceInterface {
+  public constructor(
+    @Inject('EVALUATION') private readonly evaluationClient: ClientProxy,
+  ) {}
+  private readonly logger: Logger = new Logger(DataspecerAdapterService.name);
+
   public getHello(): string {
     return 'Hello World!';
   }
 
   public async getPsm(dataspecerBaseUrl: string, iri: string): Promise<string> {
+    this.logger.log(`Service getPsm iri=${iri}`);
+    // Strategy 1: MCP tool -> /resources/blob?iri=...
     try {
-      const url: string = `${dataspecerBaseUrl}/api/resources/blob?iri=${encodeURIComponent(iri)}`;
-      console.log('url', url);
-      const response: AxiosResponse = await axios.get(url, { responseType: 'text', validateStatus: () => true });
-
-      if (response.status < 200 || response.status >= 300) {
-        const errorText: string = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
-        throw new Error(`Failed to fetch PSM schema: ${response.status} ${response.statusText}. Response: ${errorText}`);
+      const client = this.createClient();
+      const result = await client.callTool<any>('dataspecer.get_resource_blob', { iri });
+      const text: string = result?.content?.[0]?.text ?? '';
+      if (text) {
+        try { return JSON.stringify(JSON.parse(text), null, 2); } catch { return text; }
       }
-
-      const responseText: string = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
-      try {
-        const psmData: any = JSON.parse(responseText);
-        return JSON.stringify(psmData, null, 2);
-      } catch (parseError) {
-        // If it is already JSON text, return as-is; otherwise, bubble up
-        try {
-          JSON.parse(responseText);
-          return responseText;
-        } catch {
-          throw new Error(`PSM API returned invalid JSON: ${(parseError as Error).message}`);
-        }
+    } catch (e) {
+      this.logger.warn(`MCP get_resource_blob failed: ${e instanceof Error ? e.message : e}`);
+    }
+    // Strategy 2: Direct Dataspecer HTTP GET /resources/blob?iri=...
+    try {
+      const base = (dataspecerBaseUrl || '').replace(/\/+$/, '');
+      const url = `${base}/resources/blob?iri=${encodeURIComponent(iri)}`;
+      this.logger.log(`HTTP fallback (blob): GET ${url}`);
+      const resp = await (await import('axios')).default.get(url, { responseType: 'text', validateStatus: () => true });
+      if (resp.status >= 200 && resp.status < 300 && resp.data) {
+        const text = String(resp.data);
+        try { return JSON.stringify(JSON.parse(text), null, 2); } catch { return text; }
       }
-    } catch (error: any) {
-      throw new Error(`Failed to get PSM from Dataspecer: ${error.message}`);
+      this.logger.warn(`HTTP blob fallback returned ${resp.status} ${resp.statusText}`);
+    } catch (e) {
+      this.logger.warn(`HTTP blob fallback error: ${e instanceof Error ? e.message : e}`);
+    }
+    // Strategy 3: Dialogs Handler HTTP /api/specifications/psm?iri=...
+    try {
+      const dialogBase = (process.env.DIALOG_HANDLER_URL || 'http://dialogs-handler:3100').replace(/\/+$/, '');
+      const url = `${dialogBase}/api/specifications/psm?iri=${encodeURIComponent(iri)}`;
+      this.logger.log(`Dialogs-handler fallback: GET ${url}`);
+      const resp = await (await import('axios')).default.get(url, { responseType: 'json', validateStatus: () => true });
+      const content: string | undefined = resp?.data?.content;
+      if (resp.status >= 200 && resp.status < 300 && content) {
+        try { return JSON.stringify(JSON.parse(content), null, 2); } catch { return content; }
+      }
+      throw new Error(`dialogs-handler returned ${resp.status} ${resp.statusText}`);
+    } catch (e) {
+      this.logger.error(`All PSM fetch strategies failed for IRI=${iri}: ${e instanceof Error ? e.message : e}`);
+      throw e instanceof Error ? e : new Error(String(e));
     }
   }
 
   public async getZipExport(dataspecerBaseUrl: string, iri: string): Promise<Buffer> {
-    try {
-      const url: string = `${dataspecerBaseUrl}/resources/export.zip?iri=${encodeURIComponent(iri)}`;
-      const response: AxiosResponse = await axios.get(url, { responseType: 'arraybuffer' });
-      return Buffer.from(response.data);
-    } catch (error) {
-      throw new Error(`Failed to get zip export from Dataspecer: ${error.message}`);
-    }
+    this.logger.log(`Service getZipExport iri=${iri}`);
+    const client = this.createClient();
+    const result = await client.callTool<any>('dataspecer.get_zip_export', { iri });
+    const b64: string | undefined = result?.content?.[0]?.data;
+    if (!b64) throw new Error('Empty zip content');
+    return Buffer.from(b64, 'base64');
   }
 
   public async getJsonSchemaViaDsv(dataspecerBaseUrl: string, dataSpecificationIri: string, psmIri?: string): Promise<string> {
+    this.logger.log(`Service getJsonSchemaViaDsv dataSpecificationIri=${dataSpecificationIri}${psmIri ? `, psmIri=${psmIri}` : ''}`);
+    // First try MCP tool which hits /preview/schema.json under the hood
     try {
-      const htmlDocUrl: string = `${dataspecerBaseUrl}/api/preview/index.html?iri=${encodeURIComponent(dataSpecificationIri)}`;
-      const response: AxiosResponse = await axios.get(htmlDocUrl, { responseType: 'text', validateStatus: () => true });
-
-      if (response.status < 200 || response.status >= 300) {
-        const errorText: string = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
-        throw new Error(`Failed to fetch HTML documentation: ${response.status} ${response.statusText}. Response: ${errorText}`);
+      const client = this.createClient();
+      const result = await client.callTool<any>('dataspecer.get_json_schema', { dataSpecificationIri, psmIri });
+      const text: string = result?.content?.[0]?.text ?? '';
+      if (text) return text;
+    } catch (e) {
+      this.logger.warn(`MCP get_json_schema failed: ${e instanceof Error ? e.message : e}`);
+    }
+    // Fallback: direct HTTP call similar to /api/changes/schemas/dsv logic
+    try {
+      const base = (dataspecerBaseUrl || '').replace(/\/+$/, '');
+      const baseUrl = `${base}/preview/schema.json?iri=${encodeURIComponent(dataSpecificationIri)}`;
+      const url = psmIri ? `${baseUrl}&psm=${encodeURIComponent(psmIri)}` : baseUrl;
+      this.logger.log(`HTTP fallback: GET ${url}`);
+      const resp = await (await import('axios')).default.get(url, { responseType: 'text', validateStatus: () => true });
+      if (resp.status >= 200 && resp.status < 300 && resp.data) {
+        return String(resp.data);
       }
-
-      const htmlContent: string = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
-      const metadata: any = this.extractMetadataFromHtml(htmlContent);
-      if (!metadata) {
-        throw new Error('No embedded metadata found in HTML documentation');
+      this.logger.warn(`HTTP fallback returned ${resp.status} ${resp.statusText}`);
+    } catch (e) {
+      this.logger.warn(`HTTP fallback error: ${e instanceof Error ? e.message : e}`);
+    }
+    // Final fallback: call Changes Detector HTTP endpoint that is known-good in your env
+    try {
+      const cdBase = (process.env.CHANGES_DETECTOR_URL || 'http://changes-detector:3101').replace(/\/+$/, '');
+      const url = `${cdBase}/api/changes/schemas/dsv?dataSpecificationIri=${encodeURIComponent(dataSpecificationIri)}`;
+      this.logger.log(`Changes-detector fallback: GET ${url}`);
+      const resp = await (await import('axios')).default.get(url, { responseType: 'json', validateStatus: () => true });
+      const content: string | undefined = resp?.data?.content;
+      if (resp.status >= 200 && resp.status < 300 && content) {
+        return content;
       }
-
-      const jsonSchemaUrl: string | null = this.findJsonSchemaUrl(metadata);
-      if (!jsonSchemaUrl) {
-        throw new Error('No JSON schema found in DSV metadata');
-      }
-
-      const schemaResponse: AxiosResponse = await axios.get(jsonSchemaUrl, { responseType: 'text', validateStatus: () => true });
-      if (schemaResponse.status < 200 || schemaResponse.status >= 300) {
-        const errorText: string = typeof schemaResponse.data === 'string' ? schemaResponse.data : JSON.stringify(schemaResponse.data);
-        throw new Error(`Failed to fetch JSON schema from URL: ${schemaResponse.status} ${schemaResponse.statusText}. Response: ${errorText}`);
-      }
-
-      const jsonSchema: string = typeof schemaResponse.data === 'string' ? schemaResponse.data : JSON.stringify(schemaResponse.data);
-      return jsonSchema;
-    } catch (error: any) {
-      return this.getJsonSchemaOld(dataspecerBaseUrl, dataSpecificationIri, psmIri);
+      throw new Error(`changes-detector returned ${resp.status} ${resp.statusText}`);
+    } catch (e) {
+      this.logger.error(`All schema fetch strategies failed for IRI=${dataSpecificationIri}: ${e instanceof Error ? e.message : e}`);
+      throw e instanceof Error ? e : new Error(String(e));
     }
   }
 
+  public async listSpecs(): Promise<string> {
+    this.logger.log(`Service listSpecs`);
+    const client = this.createClient();
+    const result = await client.callTool<any>('dataspecer.list_specs', {});
+    const text: string = result?.content?.[0]?.text ?? '[]';
+    return text;
+  }
+
+  public async listResources(parentIri: string): Promise<string> {
+    this.logger.log(`Service listResources parentIri=${parentIri}`);
+    const client = this.createClient();
+    const result = await client.callTool<any>('dataspecer.list_resources', { parentIri });
+    const text: string = result?.content?.[0]?.text ?? '[]';
+    return text;
+  }
+
   private async getJsonSchemaOld(dataspecerBaseUrl: string, dataSpecificationIri: string, psmIri?: string): Promise<string> {
-    const baseUrl: string = `${dataspecerBaseUrl}/api/preview/schema.json?iri=${encodeURIComponent(dataSpecificationIri)}`;
-    const url: string = psmIri ? `${baseUrl}&psm=${encodeURIComponent(psmIri)}` : baseUrl;
-    const response: AxiosResponse = await axios.get(url, { responseType: 'text', validateStatus: () => true });
-    if (response.status < 200 || response.status >= 300) {
-      const errorText: string = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
-      throw new Error(`Failed to generate JSON schema: ${response.status} ${response.statusText}. Response: ${errorText}`);
-    }
-    return typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
+    // Fallback to REST (legacy) if MCP not available
+    throw new Error('Legacy REST fallback disabled: MCP required');
   }
 
   private extractMetadataFromHtml(html: string): any | null {
@@ -147,5 +189,70 @@ export class DataspecerAdapterService implements DataspecerAdapterServiceInterfa
     } catch {
       return null;
     }
+  }
+
+  private createClient(): McpHttpClient {
+    const baseUrl = process.env.DATASPECER_MCP_BASE_URL || 'http://dataspecer/api/mcp';
+    const authToken = process.env.DATASPECER_MCP_TOKEN || process.env.MCP_AUTH_SECRET;
+    return new McpHttpClient({ baseUrl, authToken });
+  }
+
+  public async previewApply(operations: Array<{ op: string; args: any }>, token?: string): Promise<{ planId: string; report: { ok: boolean; issues: Array<{ level: string; message: string }> } }> {
+    const client = this.createClient();
+    const result = await client.callTool<any>('dataspecer.preview_apply', { operations, token });
+    const payload: { planId: string; report: { ok: boolean; issues: Array<{ level: string; message: string }> } } = {
+      planId: result?.planId,
+      report: result?.report ?? { ok: false, issues: [{ level: 'error', message: 'No report returned' }] },
+    };
+    // Emit validator and MCP safety events
+    const validatorEvent: ValidatorCheckEventDto = {
+      stage: 'preview',
+      planId: payload.planId,
+      reportOk: !!payload.report?.ok,
+      issues: (payload.report?.issues || []).map(i => ({ level: (i.level as any) ?? 'error', message: i.message })),
+      timestamp: new Date().toISOString(),
+    };
+    this.evaluationClient.emit('evaluation.validator', validatorEvent).subscribe({ error: () => {} });
+    const mcpEvent: McpSafetyEventDto = {
+      eventType: 'preview_apply',
+      planId: payload.planId,
+      ok: !!payload.report?.ok,
+      issuesCount: Array.isArray(payload.report?.issues) ? payload.report.issues.length : 0,
+      timestamp: new Date().toISOString(),
+    };
+    this.evaluationClient.emit('evaluation.mcp', mcpEvent).subscribe({ error: () => {} });
+    return payload;
+  }
+
+  public async applyChanges(planId: string, token?: string): Promise<{ applied: boolean; changedIris: string[] }> {
+    const client = this.createClient();
+    const result = await client.callTool<any>('dataspecer.apply_changes', { planId, confirm: true, token });
+    const payload = {
+      applied: !!result?.applied,
+      changedIris: Array.isArray(result?.changedIris) ? result.changedIris : [],
+    };
+    const mcpEvent: McpSafetyEventDto = {
+      eventType: 'apply_changes',
+      planId,
+      ok: !!payload.applied,
+      timestamp: new Date().toISOString(),
+    };
+    this.evaluationClient.emit('evaluation.mcp', mcpEvent).subscribe({ error: () => {} });
+    const applyEvent: ApplyMetricEventDto = {
+      planId,
+      appliedOk: !!payload.applied,
+      changedIrisCount: payload.changedIris.length,
+      timestamp: new Date().toISOString(),
+    };
+    this.evaluationClient.emit('evaluation.apply', applyEvent).subscribe({ error: () => {} });
+    return payload;
+  }
+
+  public async getLightweightOwlTtl(iri: string): Promise<string> {
+    const client = this.createClient();
+    const result = await client.callTool<any>('dataspecer.generate_lightweight_owl_from_iri', { iri });
+    const ttl: string = result?.content?.[0]?.text ?? '';
+    if (!ttl) throw new Error('Empty OWL/Turtle payload');
+    return ttl;
   }
 }

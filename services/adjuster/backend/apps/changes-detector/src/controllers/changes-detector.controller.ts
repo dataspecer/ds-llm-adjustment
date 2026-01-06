@@ -14,7 +14,8 @@ export class ChangesDetectorController {
     @ApiBody({ schema: { $ref: '#/components/schemas/DetectChangesDto' } })
     @ApiOkResponse({ type: DetectedChangesDto })
     public async detectChangesHttp(@Body() dto: DetectChangesDto): Promise<DetectedChangesDto> {
-      const changes: DetectedChangesDto = await this._changesDetectorService.detect(dto);
+      const runId: string = dto.runId || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      const changes: DetectedChangesDto = await this._changesDetectorService.detect({ ...dto, runId });
       return changes;
     }
 
@@ -23,7 +24,8 @@ export class ChangesDetectorController {
     @ApiBody({ schema: { $ref: '#/components/schemas/DetectChangesFromIriDto' } })
     @ApiOkResponse({ type: DetectedChangesDto })
     public async detectChangesFromIriHttp(@Body() dto: DetectChangesFromIriDto): Promise<DetectedChangesDto> {
-      const changes: DetectedChangesDto = await this._changesDetectorService.detectFromIri(dto);
+      const runId: string = dto.runId || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      const changes: DetectedChangesDto = await this._changesDetectorService.detectFromIri({ ...dto, runId } as any);
       return changes;
     }
 
@@ -32,7 +34,8 @@ export class ChangesDetectorController {
     @ApiBody({ schema: { $ref: '#/components/schemas/DetectChangesHybridDto' } })
     @ApiOkResponse({ type: DetectedChangesDto })
     public async detectChangesHybridHttp(@Body() dto: DetectChangesHybridDto): Promise<DetectedChangesDto> {
-      const changes: DetectedChangesDto = await this._changesDetectorService.detectHybrid(dto);
+      const runId: string = dto.runId || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      const changes: DetectedChangesDto = await this._changesDetectorService.detectHybrid({ ...dto, runId } as any);
       return changes;
     }
 
@@ -41,7 +44,8 @@ export class ChangesDetectorController {
     @ApiBody({ schema: { $ref: '#/components/schemas/DetectChangesAutomaticDto' } })
     @ApiOkResponse({ type: DetectedChangesDto })
     public async detectChangesAutomaticHttp(@Body() dto: DetectChangesAutomaticDto): Promise<DetectedChangesDto> {
-      const changes: DetectedChangesDto = await this._changesDetectorService.detectAutomatic(dto);
+      const runId: string = dto.runId || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      const changes: DetectedChangesDto = await this._changesDetectorService.detectAutomatic({ ...dto, runId } as any);
       return changes;
     }
 

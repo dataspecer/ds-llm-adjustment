@@ -32,6 +32,52 @@ export interface SuggestionsDto {
   suggestions: Suggestion[];
 }
 
+// ===== Evaluation DTOs =====
+export type EvalChangeKind = 'addition' | 'removal' | 'modify' | 'rename' | 'type-change';
+
+export interface EvalTypedChangeRef {
+  id: string;
+  type: EvalChangeKind;
+  path: string;
+}
+
+export interface EvalPerTypeScores {
+  type: EvalChangeKind;
+  truePositives: number;
+  falsePositives: number;
+  falseNegatives: number;
+  precision: number;
+  recall: number;
+  f1: number;
+}
+
+export interface DiffQualityInputDto {
+  runId: string;
+  gold: EvalTypedChangeRef[];
+  predicted: EvalTypedChangeRef[];
+}
+
+export interface DiffQualityResultDto {
+  runId: string;
+  perType: EvalPerTypeScores[];
+  microAveraged: {
+    precision: number;
+    recall: number;
+    f1: number;
+  };
+}
+
+export type UxRole = 'Developer' | 'Maintainer' | 'Other';
+export interface UxSurveyDto {
+  runId?: string;
+  dialogId?: string;
+  role: UxRole;
+  helpfulnessLikert: number; // 1-7
+  susItems?: number[]; // 10 items 1-5
+  susScore?: number; // 0-100
+  comments?: string;
+}
+
 // New interfaces for Specification Maintainer workflow
 export interface SpecificationDto {
   id: string;
@@ -56,6 +102,7 @@ export interface SchemaChangeDto {
   isProblematic: boolean;
   suggestion?: string;
   rationale?: string;
+  satisfaction?: number; // 1-10
 }
 
 export interface ChangeDecisionDto {
@@ -128,6 +175,7 @@ export interface StartChatDto {
   changeIds: string[];
   changes: SchemaChangeDto[];
   initialPrompt?: string;
+  runId?: string;
 }
 
 export interface SendMessageDto {
@@ -136,10 +184,49 @@ export interface SendMessageDto {
 }
 
 class Api {
-  private changesDetectorUrl = process.env.NEXT_PUBLIC_CHANGES_DETECTOR_URL || 'http://localhost:3000/detector';
-  private changesSuggesterUrl = process.env.NEXT_PUBLIC_CHANGES_SUGGESTER_URL || 'http://localhost:3000/suggester';
-  private dialogHandlerUrl = process.env.NEXT_PUBLIC_DIALOG_HANDLER_URL || 'http://localhost:3000/dialogs-handler';
-  private dataspecerBackendUrl = process.env.NEXT_PUBLIC_DATASPECER_BACKEND || 'http://localhost:3000/dataspecer';
+  private changesDetectorUrl = process.env.NEXT_PUBLIC_CHANGES_DETECTOR_URL || 'http://ulianov-diploma-dataspecer.westeurope.cloudapp.azure.com/detector';
+  private changesSuggesterUrl = process.env.NEXT_PUBLIC_CHANGES_SUGGESTER_URL || 'http://ulianov-diploma-dataspecer.westeurope.cloudapp.azure.com/suggester';
+  private dialogHandlerUrl = process.env.NEXT_PUBLIC_DIALOG_HANDLER_URL || 'http://ulianov-diploma-dataspecer.westeurope.cloudapp.azure.com/dialogs-handler';
+  private dataspecerBackendUrl = process.env.NEXT_PUBLIC_DATASPECER_BACKEND || 'http://ulianov-diploma-dataspecer.westeurope.cloudapp.azure.com/dataspecer';
+
+  // ===== Evaluation API =====
+  async submitEvaluationDiff(payload: DiffQualityInputDto): Promise<ApiResponse<DiffQualityResultDto>> {
+    try {
+      const response = await fetch(`${this.dialogHandlerUrl}/api/evaluation/diff`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) {
+        throw new Error('Failed to submit diff evaluation');
+      }
+      const data = await response.json();
+      return { data };
+    } catch (error) {
+      return {
+        error: error instanceof Error ? error.message : 'An error occurred',
+      };
+    }
+  }
+
+  async submitUxSurvey(payload: UxSurveyDto): Promise<ApiResponse<{ ok: true }>> {
+    try {
+      const response = await fetch(`${this.dialogHandlerUrl}/api/evaluation/ux`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) {
+        throw new Error('Failed to submit UX survey');
+      }
+      const data = await response.json();
+      return { data };
+    } catch (error) {
+      return {
+        error: error instanceof Error ? error.message : 'An error occurred',
+      };
+    }
+  }
 
   async detectChangesFromIri(
     psmIri: string,
@@ -252,6 +339,9 @@ class Api {
       }
 
       const data = await response.json();
+      try {
+        if (data?.runId) sessionStorage.setItem('adjusterRunId', data.runId);
+      } catch {}
       console.log('detectChangesAutomatic response data:', data);
       return { data };
     } catch (error) {
@@ -302,6 +392,9 @@ class Api {
       }
 
       const data = await response.json();
+      try {
+        if (data?.runId) sessionStorage.setItem('adjusterRunId', data.runId);
+      } catch {}
       console.log('Response data:', data);
       return { data };
     } catch (error) {
@@ -317,6 +410,7 @@ class Api {
     psm: string
   ): Promise<ApiResponse<SuggestionsDto>> {
     try {
+      const runId = (() => { try { return sessionStorage.getItem('adjusterRunId') || undefined } catch { return undefined } })();
       const response = await fetch(`${this.changesSuggesterUrl}/api/suggestions`, {
         method: 'POST',
         headers: {
@@ -325,6 +419,7 @@ class Api {
         body: JSON.stringify({
           changes: changes.changes,
           dialogId: changes.dialogId,
+          runId,
           psm,
         }),
       });
@@ -334,6 +429,9 @@ class Api {
       }
 
       const data = await response.json();
+      try {
+        if (data?.runId) sessionStorage.setItem('adjusterRunId', data.runId);
+      } catch {}
       return { data };
     } catch (error) {
       return {
@@ -656,12 +754,26 @@ class Api {
    */
   async startChat(startChatDto: StartChatDto): Promise<ApiResponse<ChatConversation>> {
     try {
+      const ensuredRunId = (() => {
+        try {
+          let rid = sessionStorage.getItem('adjusterRunId') || undefined;
+          if (!rid) {
+            rid = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+            sessionStorage.setItem('adjusterRunId', rid);
+          }
+          return rid;
+        } catch {
+          // Fallback if sessionStorage is unavailable
+          return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+        }
+      })();
+      const body = { ...startChatDto, runId: startChatDto.runId || ensuredRunId };
       const response = await fetch(`${this.dialogHandlerUrl}/api/specifications/chats`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(startChatDto),
+        body: JSON.stringify(body),
       });
 
       if (!response.ok) {
@@ -827,6 +939,26 @@ class Api {
 
       const data = await response.json();
       return { data };
+    } catch (error) {
+      return {
+        error: error instanceof Error ? error.message : 'An error occurred',
+      };
+    }
+  }
+
+  /**
+   * Preview updated PSM JSON for an analysis (applies accepted changes via LLM)
+   */
+  async previewPsm(analysisId: string): Promise<ApiResponse<{ content: string }>> {
+    try {
+      const response = await fetch(`${this.changesSuggesterUrl}/api/suggestions/psm-preview/${encodeURIComponent(analysisId)}`, {
+        method: 'GET',
+      });
+      if (!response.ok) {
+        throw new Error('Failed to preview PSM');
+      }
+      const text = await response.text();
+      return { data: { content: text } };
     } catch (error) {
       return {
         error: error instanceof Error ? error.message : 'An error occurred',

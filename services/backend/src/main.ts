@@ -29,6 +29,7 @@ import { getSimplifiedSemanticModel, setSimplifiedSemanticModel } from "./routes
 import { getSystemData } from "./routes/system.ts";
 import { useStaticSpaHandler } from "./static.ts";
 import { migratePR419 } from "./tools/migrate-pr419.ts";
+import { registerMcpHandlers } from "./mcp/server.ts";
 
 // Create application models
 
@@ -130,6 +131,13 @@ application.get(apiBasename + "/generate/application", getGenerateApplicationByM
 
 application.post(apiBasename + "/generate-app", getGeneratedApplication);
 
+// MCP endpoints (optional)
+if (configuration.mcp?.enabled) {
+  const basePath = configuration.mcp.basePath ?? (apiBasename + "/mcp");
+  const apiBaseUrl = `http://127.0.0.1:${Number(configuration.port)}${apiBasename}`;
+  registerMcpHandlers(application, { basePath, authSecret: configuration.mcp.authSecret }, { apiBaseUrl });
+}
+
 // System routes
 
 application.get(apiBasename + "/system/data", getSystemData); // Downloads database directory as ZIP file
@@ -179,8 +187,12 @@ if (configuration.staticFilesPath) {
     }
 
     application.listen(Number(configuration.port), () => {
-      console.log(`Server is listening on port ${Number(configuration.port)}.`);
-      console.log(`Try opening ${fullUrl}.`);
+      if (configuration.inDocker) {
+        console.log(`Dataspecer is running! Try opening your browser at http://localhost:port/ where port is the port you mapped to the container's port ${configuration.port}.`);
+      } else {
+        console.log(`Server is listening on port ${Number(configuration.port)}.`);
+        console.log(`Try opening ${fullUrl}.`);
+      }
     });
   }
 })();
